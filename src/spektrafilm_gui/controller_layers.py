@@ -42,7 +42,9 @@ WATERMARK_LONG_EDGE_PIXELS = 1024
 
 
 def virtual_photo_paper_back(*args, **kwargs):
-    return import_module('spektrafilm_gui.virtual_photo_paper_back').virtual_photo_paper_back(*args, **kwargs)
+    # Pass everything as kwargs to support the new Config-based signature while maintaining backward compatibility.
+    # Note: args are deliberately ignored since the new signature doesn't use positional arguments.
+    return import_module('spektrafilm_gui.virtual_photo_paper_back').virtual_photo_paper_back(**kwargs)
 
 
 def _watermark_raster_size(
