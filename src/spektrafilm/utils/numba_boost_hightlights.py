@@ -1,26 +1,32 @@
+from typing import NamedTuple
+
 import numpy as np
 from numba import njit, prange
+
+
+class BoostCurveParams(NamedTuple):
+    inv_max_raw: float
+    a: float
+    raw_x0: float
+    boost_scale: float
 
 
 @njit(parallel=True, cache=True, fastmath=True)
 def _boost_curve_kernel(
     x: np.ndarray,
     y: np.ndarray,
-    inv_max_raw: float,
-    a: float,
-    raw_x0: float,
-    boost_scale: float,
+    params: BoostCurveParams,
 ) -> None:
     h, w, c = x.shape
     for i in prange(h):
         for j in range(w):
             for ch in range(c):
                 xv = x[i, j, ch]
-                if xv <= raw_x0:
+                if xv <= params.raw_x0:
                     y[i, j, ch] = xv
                 else:
-                    dx = (xv - raw_x0) * inv_max_raw
-                    b = boost_scale * (np.exp(a * dx) - a * dx - 1.0)
+                    dx = (xv - params.raw_x0) * params.inv_max_raw
+                    b = params.boost_scale * (np.exp(params.a * dx) - params.a * dx - 1.0)
                     y[i, j, ch] = xv + b
 
 
@@ -115,7 +121,8 @@ def boost_highlights(
     inv_max_raw = 1.0 / max_raw
     boost_scale = k * max_raw
 
-    _boost_curve_kernel(x, y, inv_max_raw, a, raw_x0, boost_scale)
+    params = BoostCurveParams(inv_max_raw, a, raw_x0, boost_scale)
+    _boost_curve_kernel(x, y, params)
     return y
 
 
