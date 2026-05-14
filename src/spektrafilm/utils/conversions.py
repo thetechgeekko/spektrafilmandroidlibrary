@@ -1,3 +1,6 @@
+from dataclasses import dataclass, field
+from typing import Any
+
 import numpy as np
 import colour
 from opt_einsum import contract
@@ -45,31 +48,35 @@ def compute_aces_conversion_matrix(sensitivity, illuminant):
     aces_to_raw_conversion_matrix = np.linalg.inv(M)
     return aces_to_raw_conversion_matrix
 
-def rgb_to_raw_aces_idt(RGB, illuminant, sensitivity, midgray_rgb=[[[0.184,0.184,0.184]]],
-                        color_space='sRGB', apply_cctf_decoding=True, aces_conversion_matrix=[]):
+@dataclass(frozen=True, slots=True)
+class AcesIdtParams:
+    illuminant: Any
+    sensitivity: Any
+    midgray_rgb: Any = field(default_factory=lambda: [[[0.184, 0.184, 0.184]]])
+    color_space: str = 'sRGB'
+    apply_cctf_decoding: bool = True
+    aces_conversion_matrix: Any = field(default_factory=list)
+
+def rgb_to_raw_aces_idt(RGB, params: AcesIdtParams):
     """
     Converts RGB values to raw values using ACES IDT (Input Device Transform).
 
     Parameters:
     RGB (array-like): The input RGB values.
-    illuminant (array-like): The illuminant data.
-    sensitivity (array-like): The sensitivity data.
-    midgray_rgb (array-like, optional): The mid-gray RGB values. Default is [[[0.184, 0.184, 0.184]]].
-    color_space (str, optional): The color space of the input RGB values. Default is 'sRGB'.
-    apply_cctf_decoding (bool, optional): Whether to apply the CCTF decoding. Default is True.
-    aces_conversion_matrix (array-like, optional): The ACES conversion matrix. Default is an empty list.
+    params (AcesIdtParams): The parameters for the conversion.
 
     Returns:
     tuple: A tuple containing:
         - raw (array-like): The raw values.
         - raw_midgray (array-like): The raw mid-gray values.
     """
-    aces = colour.RGB_to_RGB(RGB, color_space, 'ACES2065-1',
-                    apply_cctf_decoding=apply_cctf_decoding,
+    aces = colour.RGB_to_RGB(RGB, params.color_space, 'ACES2065-1',
+                    apply_cctf_decoding=params.apply_cctf_decoding,
                     apply_cctf_encoding=False)
-    if aces_conversion_matrix==[]:
-        aces_conversion_matrix = compute_aces_conversion_matrix(sensitivity, illuminant)
-    raw = contract('ijk,lk->ijl',aces,aces_conversion_matrix)/midgray_rgb
+    aces_conversion_matrix = params.aces_conversion_matrix
+    if len(aces_conversion_matrix) == 0:
+        aces_conversion_matrix = compute_aces_conversion_matrix(params.sensitivity, params.illuminant)
+    raw = contract('ijk,lk->ijl', aces, aces_conversion_matrix) / params.midgray_rgb
     raw_midgray = np.array([[[1,1,1]]])
     return raw, raw_midgray
 
