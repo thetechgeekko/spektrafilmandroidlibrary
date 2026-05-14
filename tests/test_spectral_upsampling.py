@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from spektrafilm.utils import spectral_upsampling as spectral_upsampling_module
-
+from spektrafilm.utils.spectral_upsampling import UpsamplingParams
 
 pytestmark = pytest.mark.unit
 
@@ -19,7 +19,7 @@ def test_rgb_to_raw_hanatos2025_computes_tc_lut_when_missing(monkeypatch):
     )
     rgb = np.zeros((2, 3, 3), dtype=np.float64)
 
-    def fake_rgb_to_tc_b(data, **_kwargs):
+    def fake_rgb_to_tc_b(data, params=None, **_kwargs):
         tc = np.zeros(data.shape[:-1] + (2,), dtype=np.float64)
         if data.shape == (1, 1, 3):
             scale = np.ones((1, 1), dtype=np.float64)
@@ -44,12 +44,15 @@ def test_rgb_to_raw_hanatos2025_computes_tc_lut_when_missing(monkeypatch):
     monkeypatch.setattr(spectral_upsampling_module, 'compute_hanatos2025_tc_lut', fake_compute_hanatos2025_tc_lut)
     monkeypatch.setattr(spectral_upsampling_module, 'apply_lut_cubic_2d', fake_apply_lut_cubic_2d)
 
-    raw = spectral_upsampling_module.rgb_to_raw_hanatos2025(
-        rgb,
-        sensitivity,
+    params = UpsamplingParams(
         color_space='sRGB',
         apply_cctf_decoding=False,
         reference_illuminant='D65',
+    )
+    raw = spectral_upsampling_module.rgb_to_raw_hanatos2025(
+        rgb,
+        sensitivity,
+        params=params,
     )
 
     assert len(lut_calls) == 1
@@ -74,7 +77,7 @@ def test_rgb_to_raw_hanatos2025_lut_path_supports_image_rgb(monkeypatch):
     )
     rgb = np.zeros((2, 3, 3), dtype=np.float64)
 
-    def fake_rgb_to_tc_b(data, **_kwargs):
+    def fake_rgb_to_tc_b(data, params=None, **_kwargs):
         tc = np.zeros(data.shape[:-1] + (2,), dtype=np.float64)
         if data.shape == (1, 1, 3):
             scale = np.ones((1, 1), dtype=np.float64)
@@ -92,12 +95,15 @@ def test_rgb_to_raw_hanatos2025_lut_path_supports_image_rgb(monkeypatch):
     monkeypatch.setattr(spectral_upsampling_module, '_rgb_to_tc_b', fake_rgb_to_tc_b)
     monkeypatch.setattr(spectral_upsampling_module, 'apply_lut_cubic_2d', fake_apply_lut_cubic_2d)
 
-    raw = spectral_upsampling_module.rgb_to_raw_hanatos2025(
-        rgb,
-        sensitivity,
+    params = UpsamplingParams(
         color_space='sRGB',
         apply_cctf_decoding=False,
         reference_illuminant='D65',
+    )
+    raw = spectral_upsampling_module.rgb_to_raw_hanatos2025(
+        rgb,
+        sensitivity,
+        params=params,
         tc_lut=np.zeros((2, 2, 3), dtype=np.float64),
     )
 

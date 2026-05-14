@@ -14,13 +14,10 @@ def test_rgb_to_film_raw_applies_hanatos_bandpass_to_sensitivity(monkeypatch) ->
     def fake_rgb_to_raw_hanatos2025(
         rgb,
         sensitivity,
-        *,
-        color_space=None,
-        apply_cctf_decoding=None,
-        reference_illuminant=None,
+        params=None,
         tc_lut=None,
     ):
-        del color_space, apply_cctf_decoding, reference_illuminant, tc_lut
+        del params, tc_lut
         captured['sensitivity'] = np.asarray(sensitivity, dtype=float)
         return np.ones(rgb.shape, dtype=float)
 
