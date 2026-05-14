@@ -2,13 +2,20 @@ import numpy as np
 
 from spektrafilm.utils import numba_boost_hightlights as boost_module
 from spektrafilm.utils import numba_warmup
+from spektrafilm.utils.numba_boost_hightlights import HighlightBoostParams
 
 
 def test_warmup_boost_highlights_uses_small_float64_sample(monkeypatch) -> None:
     calls: dict[str, object] = {}
 
-    def fake_boost_highlights(x: np.ndarray, **kwargs: object) -> np.ndarray:
+    def fake_boost_highlights(
+        x: np.ndarray,
+        params: HighlightBoostParams | None = None,
+        out: np.ndarray | None = None,
+        **kwargs: object
+    ) -> np.ndarray:
         calls['x'] = x.copy()
+        calls['params'] = params
         calls['kwargs'] = kwargs
         return x
 
@@ -21,7 +28,11 @@ def test_warmup_boost_highlights_uses_small_float64_sample(monkeypatch) -> None:
     assert sample.shape == (2, 2, 3)
     assert sample.dtype == np.float64
     np.testing.assert_allclose(sample, 1.0)
-    assert calls['kwargs'] == {'boost_ev': 1.0, 'boost_range': 0.5, 'protect_ev': 0.0}
+
+    params = calls['params']
+    assert params.boost_ev == 1.0
+    assert params.boost_range == 0.5
+    assert params.protect_ev == 0.0
 
 
 def test_global_warmup_includes_boost_highlights(monkeypatch) -> None:
