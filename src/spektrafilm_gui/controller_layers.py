@@ -44,6 +44,9 @@ WATERMARK_LONG_EDGE_PIXELS = 1024
 def virtual_photo_paper_back(*args, **kwargs):
     return import_module('spektrafilm_gui.virtual_photo_paper_back').virtual_photo_paper_back(*args, **kwargs)
 
+def VirtualPaperParams(*args, **kwargs):
+    return import_module('spektrafilm_gui.virtual_photo_paper_back').VirtualPaperParams(*args, **kwargs)
+
 
 def _watermark_raster_size(
     source_height: int,
@@ -70,7 +73,8 @@ def _watermark_raster_size(
 def _build_watermark_image(height: int, width: int) -> np.ndarray:
     safe_height = max(int(height), 1)
     safe_width = max(int(width), 1)
-    return np.ascontiguousarray(virtual_photo_paper_back(canvas_size=(safe_width, safe_height)))
+    params = VirtualPaperParams(canvas_size=(safe_width, safe_height))
+    return np.ascontiguousarray(virtual_photo_paper_back(params=params))
 
 
 def clear_watermark_image_cache() -> None:

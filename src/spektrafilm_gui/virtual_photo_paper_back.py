@@ -1,6 +1,8 @@
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from time import perf_counter
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 from scipy import ndimage
@@ -22,6 +24,22 @@ PHASE_VERTICAL = 0.0  # long-edge fraction
 DEFAULT_LOGO_RGB = np.array((215,215,215))/255  # RGB 0..1
 DEFAULT_BACKGROUND_RGB = np.array((242,242,242))/255  # RGB 0..1
 DEFAULT_GLARE = 0.25  # paper glare strength
+
+
+@dataclass(frozen=True, slots=True)
+class VirtualPaperParams:
+    canvas_size: Union[Tuple[int, int], int] = DEFAULT_CANVAS_SIZE
+    zoom: float = GRID_SCALE
+    angle: float = GLOBAL_ROTATION
+    overlap: float = OVERLAP_FRACTION
+    center_distance: Optional[float] = DEFAULT_CENTER_DISTANCE
+    logo_rgb: Any = None
+    background_rgb: Any = None
+    glare: float = DEFAULT_GLARE
+    rombic_grid_angle: float = ROMBIC_GRID_ANGLE
+    phase_horizontal: float = PHASE_HORIZONTAL
+    phase_vertical: float = PHASE_VERTICAL
+    seed: int = 0
 
 
 @lru_cache(maxsize=1)
@@ -131,42 +149,32 @@ def multiply_tile_transmittance(transmittance, inverse_alpha, center):
 
 
 def render_virtual_photo_paper_back(
-    canvas_size=DEFAULT_CANVAS_SIZE,
-    zoom=GRID_SCALE,
-    angle=GLOBAL_ROTATION,
-    overlap=OVERLAP_FRACTION,
-    center_distance=DEFAULT_CENTER_DISTANCE,
-    logo_rgb=DEFAULT_LOGO_RGB,
-    background_rgb=DEFAULT_BACKGROUND_RGB,
-    glare=DEFAULT_GLARE,
-    rombic_grid_angle=ROMBIC_GRID_ANGLE,
-    phase_horizontal=PHASE_HORIZONTAL,
-    phase_vertical=PHASE_VERTICAL,
-    seed=0,
+    params: VirtualPaperParams,
     measure_timing=False,
 ):
     t0 = perf_counter() if measure_timing else 0.0
-    canvas_width, canvas_height = (canvas_size, canvas_size) if isinstance(canvas_size, int) else canvas_size
+    canvas_width, canvas_height = (params.canvas_size, params.canvas_size) if isinstance(params.canvas_size, int) else params.canvas_size
     canvas_width = int(canvas_width)
     canvas_height = int(canvas_height)
     canvas_shape = (canvas_height, canvas_width)
     canvas_long_edge = float(max(canvas_width, canvas_height))
+    background_rgb = DEFAULT_BACKGROUND_RGB if params.background_rgb is None else params.background_rgb
     background = np.asarray(background_rgb, dtype=np.float32)
-    logo = np.asarray(DEFAULT_LOGO_RGB if logo_rgb is None else logo_rgb, dtype=np.float32)
+    logo = np.asarray(DEFAULT_LOGO_RGB if params.logo_rgb is None else params.logo_rgb, dtype=np.float32)
 
     source_alpha = load_logo_alpha()
-    tile_scale = float(zoom) * canvas_long_edge / float(max(source_alpha.shape))
-    tile_alpha, inverse_alpha, scaled_width = prepare_tile_stamp(tile_scale, float(angle))
+    tile_scale = float(params.zoom) * canvas_long_edge / float(max(source_alpha.shape))
+    tile_alpha, inverse_alpha, scaled_width = prepare_tile_stamp(tile_scale, float(params.angle))
     t1 = perf_counter() if measure_timing else 0.0
 
-    spacing = None if center_distance is None else float(center_distance) * canvas_long_edge
-    basis = build_rhombic_basis(scaled_width, overlap, rombic_grid_angle, angle, spacing)
+    spacing = None if params.center_distance is None else float(params.center_distance) * canvas_long_edge
+    basis = build_rhombic_basis(scaled_width, params.overlap, params.rombic_grid_angle, params.angle, spacing)
     centers = generate_lattice_centers(
         canvas_shape,
         tile_alpha.shape,
         basis,
-        float(phase_horizontal) * canvas_long_edge,
-        float(phase_vertical) * canvas_long_edge,
+        float(params.phase_horizontal) * canvas_long_edge,
+        float(params.phase_vertical) * canvas_long_edge,
     )
     t2 = perf_counter() if measure_timing else 0.0
 
@@ -175,7 +183,7 @@ def render_virtual_photo_paper_back(
         multiply_tile_transmittance(transmittance, inverse_alpha, center)
     t3 = perf_counter() if measure_timing else 0.0
 
-    glare_map = build_glare_map(canvas_shape, glare, seed)
+    glare_map = build_glare_map(canvas_shape, params.glare, params.seed)
     delta = background - logo
     canvas = np.empty((canvas_height, canvas_width, 3), dtype=np.float32)
     if glare_map is None:
@@ -191,12 +199,12 @@ def render_virtual_photo_paper_back(
         np.multiply(glare_map, 2.0, out=variation)
         variation -= 1.0
         variation *= paper
-        variation *= 0.07 * glare
+        variation *= 0.07 * params.glare
         variation += 1.0
 
         lift = np.power(glare_map, 6.0)
         lift *= paper
-        lift *= 0.42 * glare
+        lift *= 0.42 * params.glare
 
         for channel in range(3):
             np.multiply(transmittance, delta[channel], out=canvas[..., channel])
@@ -220,37 +228,18 @@ def render_virtual_photo_paper_back(
 
 
 def virtual_photo_paper_back(
-    canvas_size=DEFAULT_CANVAS_SIZE,
-    zoom=GRID_SCALE,
-    angle=GLOBAL_ROTATION,
-    overlap=OVERLAP_FRACTION,
-    center_distance=DEFAULT_CENTER_DISTANCE,
-    logo_rgb=DEFAULT_LOGO_RGB,
-    background_rgb=DEFAULT_BACKGROUND_RGB,
-    glare=DEFAULT_GLARE,
-    rombic_grid_angle=ROMBIC_GRID_ANGLE,
-    phase_horizontal=PHASE_HORIZONTAL,
-    phase_vertical=PHASE_VERTICAL,
-    seed=0,
+    params: Optional[VirtualPaperParams] = None,
     print_timing=False,
 ):
+    if params is None:
+        params = VirtualPaperParams()
+
     canvas, centers, timings = render_virtual_photo_paper_back(
-        canvas_size=canvas_size,
-        zoom=zoom,
-        angle=angle,
-        overlap=overlap,
-        center_distance=center_distance,
-        logo_rgb=logo_rgb,
-        background_rgb=background_rgb,
-        glare=glare,
-        rombic_grid_angle=rombic_grid_angle,
-        phase_horizontal=phase_horizontal,
-        phase_vertical=phase_vertical,
-        seed=seed,
+        params=params,
         measure_timing=print_timing,
     )
     if print_timing and timings is not None:
-        canvas_width, canvas_height = (canvas_size, canvas_size) if isinstance(canvas_size, int) else canvas_size
+        canvas_width, canvas_height = (params.canvas_size, params.canvas_size) if isinstance(params.canvas_size, int) else params.canvas_size
         print(
             "virtual_photo_paper_back"
             f" | canvas={int(canvas_width)}x{int(canvas_height)}"
