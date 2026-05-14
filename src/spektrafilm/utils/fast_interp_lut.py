@@ -1,5 +1,6 @@
 import numpy as np
 import warnings
+from typing import NamedTuple
 from numba import njit, prange
 from scipy.ndimage import map_coordinates
 
@@ -54,6 +55,14 @@ def cubic_coordinate_base_fraction(coord, L):
     base = int(np.floor(coord))
     return base, coord - base
 
+
+class Pchip3DPreparedLut(NamedTuple):
+    lut: np.ndarray
+    slope_x: np.ndarray
+    slope_y: np.ndarray
+    slope_z: np.ndarray
+    cell_min: np.ndarray
+    cell_max: np.ndarray
 
 @njit(cache=True)
 def _constant_lut_value_3d(lut):
@@ -390,7 +399,7 @@ def prepare_lut_pchip_3d(lut):
     lut = np.ascontiguousarray(lut, dtype=np.float64)
     _warn_if_lut_not_monotonic_3d(lut)
     slope_x, slope_y, slope_z, cell_min, cell_max = _prepare_lut_pchip_3d_impl(lut)
-    return (
+    return Pchip3DPreparedLut(
         lut,
         np.ascontiguousarray(slope_x),
         np.ascontiguousarray(slope_y),
@@ -432,46 +441,46 @@ def _clamp_to_range(value, min_value, max_value):
 
 
 @njit(cache=True)
-def _pchip_interp_lut_at_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, r, g, b):
-    size = lut.shape[0]
+def _pchip_interp_lut_at_3d_prepared(prep: Pchip3DPreparedLut, r, g, b):
+    size = prep.lut.shape[0]
     i, tr = cubic_coordinate_base_fraction(r, size)
     j, tg = cubic_coordinate_base_fraction(g, size)
     k, tb = cubic_coordinate_base_fraction(b, size)
 
-    out = np.empty(3, dtype=lut.dtype)
+    out = np.empty(3, dtype=prep.lut.dtype)
     for c in range(3):
-        v000 = _hermite_value(lut[i, j, k, c], lut[i + 1, j, k, c], slope_x[i, j, k, c], slope_x[i + 1, j, k, c], tr)
-        v010 = _hermite_value(lut[i, j + 1, k, c], lut[i + 1, j + 1, k, c], slope_x[i, j + 1, k, c], slope_x[i + 1, j + 1, k, c], tr)
-        v001 = _hermite_value(lut[i, j, k + 1, c], lut[i + 1, j, k + 1, c], slope_x[i, j, k + 1, c], slope_x[i + 1, j, k + 1, c], tr)
-        v011 = _hermite_value(lut[i, j + 1, k + 1, c], lut[i + 1, j + 1, k + 1, c], slope_x[i, j + 1, k + 1, c], slope_x[i + 1, j + 1, k + 1, c], tr)
+        v000 = _hermite_value(prep.lut[i, j, k, c], prep.lut[i + 1, j, k, c], prep.slope_x[i, j, k, c], prep.slope_x[i + 1, j, k, c], tr)
+        v010 = _hermite_value(prep.lut[i, j + 1, k, c], prep.lut[i + 1, j + 1, k, c], prep.slope_x[i, j + 1, k, c], prep.slope_x[i + 1, j + 1, k, c], tr)
+        v001 = _hermite_value(prep.lut[i, j, k + 1, c], prep.lut[i + 1, j, k + 1, c], prep.slope_x[i, j, k + 1, c], prep.slope_x[i + 1, j, k + 1, c], tr)
+        v011 = _hermite_value(prep.lut[i, j + 1, k + 1, c], prep.lut[i + 1, j + 1, k + 1, c], prep.slope_x[i, j + 1, k + 1, c], prep.slope_x[i + 1, j + 1, k + 1, c], tr)
 
-        sy00 = _linear_mix(slope_y[i, j, k, c], slope_y[i + 1, j, k, c], tr)
-        sy10 = _linear_mix(slope_y[i, j + 1, k, c], slope_y[i + 1, j + 1, k, c], tr)
-        sy01 = _linear_mix(slope_y[i, j, k + 1, c], slope_y[i + 1, j, k + 1, c], tr)
-        sy11 = _linear_mix(slope_y[i, j + 1, k + 1, c], slope_y[i + 1, j + 1, k + 1, c], tr)
+        sy00 = _linear_mix(prep.slope_y[i, j, k, c], prep.slope_y[i + 1, j, k, c], tr)
+        sy10 = _linear_mix(prep.slope_y[i, j + 1, k, c], prep.slope_y[i + 1, j + 1, k, c], tr)
+        sy01 = _linear_mix(prep.slope_y[i, j, k + 1, c], prep.slope_y[i + 1, j, k + 1, c], tr)
+        sy11 = _linear_mix(prep.slope_y[i, j + 1, k + 1, c], prep.slope_y[i + 1, j + 1, k + 1, c], tr)
 
         vz0 = _hermite_value(v000, v010, sy00, sy10, tg)
         vz1 = _hermite_value(v001, v011, sy01, sy11, tg)
 
-        sz0 = _bilinear_mix(slope_z[i, j, k, c], slope_z[i + 1, j, k, c], slope_z[i, j + 1, k, c], slope_z[i + 1, j + 1, k, c], tr, tg)
-        sz1 = _bilinear_mix(slope_z[i, j, k + 1, c], slope_z[i + 1, j, k + 1, c], slope_z[i, j + 1, k + 1, c], slope_z[i + 1, j + 1, k + 1, c], tr, tg)
+        sz0 = _bilinear_mix(prep.slope_z[i, j, k, c], prep.slope_z[i + 1, j, k, c], prep.slope_z[i, j + 1, k, c], prep.slope_z[i + 1, j + 1, k, c], tr, tg)
+        sz1 = _bilinear_mix(prep.slope_z[i, j, k + 1, c], prep.slope_z[i + 1, j, k + 1, c], prep.slope_z[i, j + 1, k + 1, c], prep.slope_z[i + 1, j + 1, k + 1, c], tr, tg)
 
         interpolated = _hermite_value(vz0, vz1, sz0, sz1, tb)
-        out[c] = _clamp_to_range(interpolated, cell_min[i, j, k, c], cell_max[i, j, k, c])
+        out[c] = _clamp_to_range(interpolated, prep.cell_min[i, j, k, c], prep.cell_max[i, j, k, c])
     return out
 
 
 @njit(parallel=True, cache=True)
-def _apply_lut_pchip_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, image):
+def _apply_lut_pchip_3d_prepared(prep: Pchip3DPreparedLut, image):
     height, width, _ = image.shape
-    output = np.empty((height, width, 3), dtype=lut.dtype)
-    scale = lut.shape[0] - 1
+    output = np.empty((height, width, 3), dtype=prep.lut.dtype)
+    scale = prep.lut.shape[0] - 1
     for i in prange(height):
         for j in range(width):
             r_in = image[i, j, 0] * scale
             g_in = image[i, j, 1] * scale
             b_in = image[i, j, 2] * scale
-            out_val = _pchip_interp_lut_at_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, r_in, g_in, b_in)
+            out_val = _pchip_interp_lut_at_3d_prepared(prep, r_in, g_in, b_in)
             output[i, j, 0] = out_val[0]
             output[i, j, 1] = out_val[1]
             output[i, j, 2] = out_val[2]
@@ -482,10 +491,10 @@ def apply_lut_pchip_3d(lut, image):
     Apply the PCHIP 3D LUT path using precomputed per-axis slopes.
     Pass the tuple returned by prepare_lut_pchip_3d().
     """
-    lut, slope_x, slope_y, slope_z, cell_min, cell_max = prepare_lut_pchip_3d(lut)
-    if lut.shape[0] == 1:
-        return _apply_lut_constant_3d(lut, image)
-    return _apply_lut_pchip_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, image)
+    prep = prepare_lut_pchip_3d(lut)
+    if prep.lut.shape[0] == 1:
+        return _apply_lut_constant_3d(prep.lut, image)
+    return _apply_lut_pchip_3d_prepared(prep, image)
 
 
 #########################
