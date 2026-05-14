@@ -223,6 +223,52 @@ def load_image_oiio(filename):
     finally:
         in_img.close()
 
+def _prepare_image_data_8bit(image_data, width, height, nchannels):
+    """Prepare 8-bit image data and spec (for PNG, JPG)."""
+    # Assume image_data is in [0, 1]: scale to 8-bit unsigned integers.
+    img_uint8 = np.clip(image_data, 0, 1) * 255.0
+    img_uint8 = img_uint8.astype(np.uint8)
+    spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("uint8"))
+    return spec, img_uint8
+
+
+def _prepare_image_data_exr(image_data, width, height, nchannels, bit_depth):
+    """Prepare EXR image data and spec."""
+    if bit_depth == 16:
+        # Convert the image data to 16-bit half precision.
+        # Note: numpy's float16 is used here; OpenImageIO accepts "half" for 16-bit floats.
+        img_half = image_data.astype(np.float16)
+        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("half"))
+        return spec, img_half
+    elif bit_depth == 32:
+        # Convert the image data to 32-bit float precision.
+        # Note: numpy's float32 is used here; OpenImageIO accepts "float" for 32-bit floats.
+        img_float = image_data.astype(np.float32)
+        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("float"))
+        return spec, img_float
+    else:
+        raise ValueError(f"Unsupported bit_depth for EXR: {bit_depth}")
+
+
+def _prepare_image_data_tiff(image_data, width, height, nchannels, bit_depth):
+    """Prepare TIFF image data and spec."""
+    if bit_depth == 8:
+        img = (np.clip(image_data, 0, 1) * 255.0).astype(np.uint8)
+        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("uint8"))
+    elif bit_depth == 16:
+        img = (np.clip(image_data, 0, 1) * 65535.0).astype(np.uint16)
+        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("uint16"))
+    elif bit_depth == 32:
+        img = image_data.astype(np.float32)
+        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("float"))
+    else:
+        raise ValueError(f"Unsupported bit_depth for TIFF: {bit_depth}")
+    # ZIP/deflate is lossless and works for all bit depths (LZW is faster but
+    # integer-only); a TIFF of a 4K float image is ~100 MB uncompressed.
+    spec.attribute("Compression", "zip")
+    return spec, img
+
+
 def save_image_oiio(
     filename,
     image_data,
@@ -283,45 +329,12 @@ def save_image_oiio(
     ext = filename.split('.')[-1].lower()
     
     # Create an ImageSpec with the proper data type
-    if ext == "png":
-        # Assume image_data is in [0, 1]: scale to 8-bit unsigned integers.
-        img_uint8 = np.clip(image_data, 0, 1) * 255.0
-        img_uint8 = img_uint8.astype(np.uint8)
-        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("uint8"))
-        data_to_write = img_uint8
-    elif ext in {"jpg", "jpeg"}:
-        img_uint8 = np.clip(image_data, 0, 1) * 255.0
-        img_uint8 = img_uint8.astype(np.uint8)
-        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("uint8"))
-        data_to_write = img_uint8
-    elif ext=="exr" and bit_depth==16:
-        # Convert the image data to 16-bit half precision.
-        # Note: numpy's float16 is used here; OpenImageIO accepts "half" for 16-bit floats.
-        img_half = image_data.astype(np.float16)
-        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("half"))
-        data_to_write = img_half
-    elif ext=='exr' and bit_depth==32:
-        # Convert the image data to 32-bit float precision.
-        # Note: numpy's float32 is used here; OpenImageIO accepts "float" for 32-bit floats.
-        img_float = image_data.astype(np.float32)
-        spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("float"))
-        data_to_write = img_float
+    if ext in {"png", "jpg", "jpeg"}:
+        spec, data_to_write = _prepare_image_data_8bit(image_data, width, height, nchannels)
+    elif ext == "exr":
+        spec, data_to_write = _prepare_image_data_exr(image_data, width, height, nchannels, bit_depth)
     elif ext in {"tif", "tiff"}:
-        if bit_depth == 8:
-            img = (np.clip(image_data, 0, 1) * 255.0).astype(np.uint8)
-            spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("uint8"))
-        elif bit_depth == 16:
-            img = (np.clip(image_data, 0, 1) * 65535.0).astype(np.uint16)
-            spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("uint16"))
-        elif bit_depth == 32:
-            img = image_data.astype(np.float32)
-            spec = oiio.ImageSpec(width, height, nchannels, oiio.TypeDesc("float"))
-        else:
-            raise ValueError(f"Unsupported bit_depth for TIFF: {bit_depth}")
-        # ZIP/deflate is lossless and works for all bit depths (LZW is faster but
-        # integer-only); a TIFF of a 4K float image is ~100 MB uncompressed.
-        spec.attribute("Compression", "zip")
-        data_to_write = img
+        spec, data_to_write = _prepare_image_data_tiff(image_data, width, height, nchannels, bit_depth)
     else:
         raise ValueError("Unsupported file extension: " + ext)
 
