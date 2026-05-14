@@ -20,6 +20,58 @@ class TestRuntimeApi:
 
         np.testing.assert_allclose(new_result, direct_result, atol=1e-12)
 
+    def test_simulate_function_delegation(self, monkeypatch):
+        digest_called_with = []
+
+        def mock_digest_params(params):
+            digest_called_with.append(params)
+            return 'digested_params'
+
+        class MockSimulator:
+            def __init__(self, params):
+                self.params = params
+                self.process_called_with = None
+                self.print_timings_called = False
+
+            def process(self, image):
+                self.process_called_with = image
+                return 'mock_result'
+
+            def print_timings(self):
+                self.print_timings_called = True
+
+        simulator_instance = None
+
+        def mock_simulator_init(params):
+            nonlocal simulator_instance
+            simulator_instance = MockSimulator(params)
+            return simulator_instance
+
+        monkeypatch.setattr(process_module, 'digest_params', mock_digest_params)
+        monkeypatch.setattr(process_module, 'Simulator', mock_simulator_init)
+
+        # Test with default parameters (digest_params_first=True, print_timings=False)
+        result = process_module.simulate('test_image', 'test_params')
+
+        assert result == 'mock_result'
+        assert digest_called_with == ['test_params']
+        assert simulator_instance is not None
+        assert simulator_instance.params == 'digested_params'
+        assert simulator_instance.process_called_with == 'test_image'
+        assert simulator_instance.print_timings_called is False
+
+        # Test with digest_params_first=False, print_timings=True
+        digest_called_with.clear()
+        simulator_instance = None
+        result = process_module.simulate('test_image_2', 'test_params_2', digest_params_first=False, print_timings=True)
+
+        assert result == 'mock_result'
+        assert digest_called_with == []
+        assert simulator_instance is not None
+        assert simulator_instance.params == 'test_params_2'
+        assert simulator_instance.process_called_with == 'test_image_2'
+        assert simulator_instance.print_timings_called is True
+
     def test_update_params_delegates_to_pipeline_without_public_state(self, monkeypatch):
         class FakePipeline:
             def __init__(self, params):
