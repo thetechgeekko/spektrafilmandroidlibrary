@@ -47,9 +47,13 @@ class FilmingStage:
             apply_cctf_decoding=self._io.input_cctf_decoding,
         )
         raw *= 2 ** self._camera.exposure_compensation_ev
-        boost_highlights(raw, self._film_render.halation.boost_ev,
-                         self._film_render.halation.boost_range,
-                         self._film_render.halation.protect_ev, out=raw)
+        boost_highlights(
+            raw,
+            boost_ev=self._film_render.halation.boost_ev,
+            boost_range=self._film_render.halation.boost_range,
+            protect_ev=self._film_render.halation.protect_ev,
+            out=raw,
+        )
         raw = apply_diffusion_filter_um(
             raw,
             self._camera.diffusion_filter,
