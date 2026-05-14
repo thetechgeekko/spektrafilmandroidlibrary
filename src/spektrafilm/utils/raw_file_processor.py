@@ -10,6 +10,38 @@ import numpy as np
 import rawpy
 from scipy.ndimage import map_coordinates
 
+@dataclass(frozen=True, slots=True)
+class RawProcessingParams:
+    """Processing parameters for RAW file loading.
+
+    Attributes
+    ----------
+    white_balance
+        White-balance mode. Supported string values are ``'as_shot'``,
+        ``'daylight'``, ``'tungsten'``, and ``'custom'``. A
+        ``(temperature, tint)`` tuple is also accepted.
+    temperature
+        Correlated colour temperature in kelvin for ``'custom'`` mode.
+    tint
+        Multiplicative adjustment applied to both green channels for
+        temperature-derived white balance.
+    lens_correction
+        When ``True``, apply all lensfun lens corrections (vignetting,
+        TCA, distortion, geometry and scale). Camera and lens are identified
+        from the EXIF metadata.
+    output_colorspace
+        Output RGB colourspace name understood by ``colour.RGB_COLOURSPACES``.
+    output_cctf_encoding
+        Whether to apply the output colourspace transfer function when a
+        colourspace conversion is requested.
+    """
+
+    white_balance: str | tuple[float, float] = 'as_shot'
+    temperature: float | None = None
+    tint: float | None = None
+    lens_correction: bool = False
+    output_colorspace: str = "ACES2065-1"
+    output_cctf_encoding: bool = False
 _TUNGSTEN_TEMPERATURE = 2850.0
 _DAYLIGHT_REFERENCE_TEMPERATURE = 6504.0
 _ACES_COLOURSPACE = colour.RGB_COLOURSPACES["ACES2065-1"]
@@ -371,13 +403,10 @@ def _apply_lens_correction(
 
 def load_and_process_raw_file(
     raw_path: str | PathLike[str],
-    white_balance='as_shot',
-    temperature: float | None = None,
-    tint: float | None = None,
-    lens_correction: bool = False,
-    output_colorspace: str = "ACES2065-1",
-    output_cctf_encoding: bool = False,
+    *args,
+    params: RawProcessingParams | None = None,
     lens_info_out: dict[str, str] | None = None,
+    **kwargs,
 ) -> np.ndarray:
     """Load a RAW file into linear RGB and optionally convert its colourspace.
 
@@ -390,24 +419,10 @@ def load_and_process_raw_file(
     ----------
     raw_path
         Path to the RAW image.
-    white_balance
-        White-balance mode. Supported string values are ``'as_shot'``,
-        ``'daylight'``, ``'tungsten'``, and ``'custom'``. A
-        ``(temperature, tint)`` tuple is also accepted.
-    temperature
-        Correlated colour temperature in kelvin for ``'custom'`` mode.
-    tint
-        Multiplicative adjustment applied to both green channels for
-        temperature-derived white balance.
-    lens_correction
-        When ``True``, apply all lensfun lens corrections (vignetting,
-        TCA, distortion, geometry and scale). Camera and lens are identified
-        from the EXIF metadata.
-    output_colorspace
-        Output RGB colourspace name understood by ``colour.RGB_COLOURSPACES``.
-    output_cctf_encoding
-        Whether to apply the output colourspace transfer function when a
-        colourspace conversion is requested.
+    params
+        Processing parameters. If None, it is constructed dynamically from args and kwargs.
+    lens_info_out
+        Output dictionary for lens correction info summary.
 
     Returns
     -------
@@ -415,11 +430,27 @@ def load_and_process_raw_file(
         RGB image as ``float32`` in the requested output colourspace.
     """
 
-    with rawpy.imread(str(raw_path)) as raw:
-        params, postprocess_adaptation, tint_multiplier = _postprocess_params(white_balance, temperature, tint)
-        rgb = raw.postprocess(**params).astype(np.float32) / np.float32(65535.0)
+    if params is not None and kwargs:
+        raise ValueError("Cannot mix params object with legacy kwargs")
 
-    if lens_correction:
+    if params is None:
+        # Backward compatibility for positional arguments
+        keys = ['white_balance', 'temperature', 'tint', 'lens_correction', 'output_colorspace', 'output_cctf_encoding', 'lens_info_out']
+        for i, arg in enumerate(args):
+            if i < len(keys):
+                if keys[i] == 'lens_info_out':
+                    lens_info_out = arg
+                else:
+                    kwargs[keys[i]] = arg
+        params = RawProcessingParams(**kwargs)
+
+    with rawpy.imread(str(raw_path)) as raw:
+        postprocess_kwargs, postprocess_adaptation, tint_multiplier = _postprocess_params(
+            params.white_balance, params.temperature, params.tint
+        )
+        rgb = raw.postprocess(**postprocess_kwargs).astype(np.float32) / np.float32(65535.0)
+
+    if params.lens_correction:
         exif_metadata = _read_exif_metadata(raw_path)
         rgb, lens_info = _apply_lens_correction(rgb, exif_metadata)
 
@@ -431,13 +462,13 @@ def load_and_process_raw_file(
 
     rgb = _apply_tint_adjustment(rgb, tint_multiplier)
 
-    if output_colorspace != 'ACES2065-1':
+    if params.output_colorspace != 'ACES2065-1':
         rgb = colour.RGB_to_RGB(
             rgb,
             input_colourspace=_ACES_COLOURSPACE,
-            output_colourspace=colour.RGB_COLOURSPACES[output_colorspace],
+            output_colourspace=colour.RGB_COLOURSPACES[params.output_colorspace],
             apply_cctf_decoding=False,
-            apply_cctf_encoding=output_cctf_encoding,
+            apply_cctf_encoding=params.output_cctf_encoding,
         )
 
     return rgb
