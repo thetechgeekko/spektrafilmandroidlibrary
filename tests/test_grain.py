@@ -49,7 +49,7 @@ class TestApplyGrain:
         grain = GrainParams(
             active=True,
             sublayers_active=False,
-            agx_particle_area_um2=0.25,
+            rms_granularity=13.0,
             agx_particle_scale=(0.9, 1.1, 1.4),
             density_min=(0.05, 0.07, 0.09),
             uniformity=(0.98, 0.97, 0.96),
@@ -69,7 +69,7 @@ class TestApplyGrain:
         expected = apply_grain_to_density(
             density_cmy.copy(),
             pixel_size_um=5.0,
-            agx_particle_area_um2=grain.agx_particle_area_um2,
+            rms_granularity=grain.rms_granularity,
             agx_particle_scale=grain.agx_particle_scale,
             density_min=grain.density_min,
             density_max_curves=np.nanmax(density_curves, axis=0),
@@ -96,7 +96,7 @@ class TestApplyGrain:
         grain = GrainParams(
             active=True,
             sublayers_active=True,
-            agx_particle_area_um2=0.18,
+            rms_granularity=11.6,
             agx_particle_scale=(0.8, 1.0, 1.2),
             agx_particle_scale_layers=(2.2, 1.0, 0.5),
             density_min=(0.04, 0.06, 0.08),
@@ -126,7 +126,7 @@ class TestApplyGrain:
             density_cmy_layers,
             density_max_layers=np.nanmax(density_curves_layers, axis=0),
             pixel_size_um=4.0,
-            agx_particle_area_um2=grain.agx_particle_area_um2,
+            rms_granularity=grain.rms_granularity,
             agx_particle_scale=grain.agx_particle_scale,
             agx_particle_scale_layers=grain.agx_particle_scale_layers,
             density_min=grain.density_min,

@@ -36,7 +36,7 @@ class LoadRawState:
 class GrainState:
     active: bool
     sublayers_active: bool
-    particle_area_um2: float
+    rms_granularity: float
     particle_scale: tuple[float, float, float]
     particle_scale_layers: tuple[float, float, float]
     density_min: tuple[float, float, float]
@@ -226,7 +226,7 @@ def gui_state_from_params(
         grain=GrainState(
             active=params.film_render.grain.active,
             sublayers_active=params.film_render.grain.sublayers_active,
-            particle_area_um2=params.film_render.grain.agx_particle_area_um2,
+            rms_granularity=params.film_render.grain.rms_granularity,
             particle_scale=tuple(params.film_render.grain.agx_particle_scale),
             particle_scale_layers=tuple(params.film_render.grain.agx_particle_scale_layers),
             density_min=tuple(params.film_render.grain.density_min),
