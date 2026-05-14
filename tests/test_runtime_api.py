@@ -138,6 +138,42 @@ class TestRuntimeApi:
             "  ScanningStage.scan   \033[31m 457 us\033[0m  \033[31m  0.4%\033[0m"
         )
 
+
+    def test_simulate_preview_delegates_to_resize_and_simulate(self, monkeypatch):
+        captured_calls = {}
+
+        def mock_resize_for_preview(image, max_size):
+            captured_calls['resize_image'] = image
+            captured_calls['resize_max_size'] = max_size
+            return 'resized_image_mock'
+
+        def mock_simulate(image, params, digest_params_first, print_timings):
+            captured_calls['simulate_image'] = image
+            captured_calls['simulate_params'] = params
+            captured_calls['simulate_digest'] = digest_params_first
+            captured_calls['simulate_print'] = print_timings
+            return 'simulate_result_mock'
+
+        monkeypatch.setattr(process_module, 'resize_for_preview', mock_resize_for_preview)
+        monkeypatch.setattr(process_module, 'simulate', mock_simulate)
+
+        params = SimpleNamespace(settings=SimpleNamespace(preview_max_size=1024))
+
+        result = process_module.simulate_preview(
+            'input_image',
+            params,
+            digest_params_first=False,
+            print_timings=True
+        )
+
+        assert result == 'simulate_result_mock'
+        assert captured_calls['resize_image'] == 'input_image'
+        assert captured_calls['resize_max_size'] == 1024
+        assert captured_calls['simulate_image'] == 'resized_image_mock'
+        assert captured_calls['simulate_params'] is params
+        assert captured_calls['simulate_digest'] is False
+        assert captured_calls['simulate_print'] is True
+
     def test_art_extlut_compatibility_path_runs(self):
         # make sure ART is compatible
         """reference this https://github.com/artraweditor/ART/blob/master/tools/extlut/spektrafilm_mklut.py"""
