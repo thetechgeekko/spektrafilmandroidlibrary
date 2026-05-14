@@ -32,12 +32,44 @@ def _load_coeffs_lut(filename='hanatos_irradiance_xy_coeffs_250304.lut'):
     with resource.open("rb") as file:
         header = file.read(header_len)
         _, _, width, height = struct.Struct(header_fmt).unpack_from(header)
-        px = [[0] * height for _ in range(width)]
-        for j in range(height):
-            for i in range(width):
-                data = file.read(pixel_len)
-                px[i][j] = struct.Struct(pixel_fmt).unpack_from(data)
-    return np.array(px)
+        expected_size = width * height * pixel_len
+        rest_of_data = file.read(expected_size)
+
+        import re
+        match = re.match(r'([=@<>!]?)(\d*)([a-zA-Z])', pixel_fmt)
+        if not match:
+            # Fallback to iter_unpack if format is complex
+            unpacked_data = list(struct.Struct(pixel_fmt).iter_unpack(rest_of_data))
+            num_channels = len(unpacked_data[0]) if unpacked_data else 0
+            data_arr = np.array(unpacked_data, dtype=np.float64).reshape((height, width, num_channels))
+        else:
+            endian, count, fmt_char = match.groups()
+
+            dtype_map = {
+                'f': 'f4', 'd': 'f8', 'e': 'f2',
+                'i': 'i4', 'I': 'u4', 'h': 'i2',
+                'H': 'u2', 'l': 'i4', 'L': 'u4',
+                'q': 'i8', 'Q': 'u8', 'b': 'i1',
+                'B': 'u1'
+            }
+            count = int(count) if count else 1
+
+            np_endian = ''
+            if endian == '<': np_endian = '<'
+            elif endian == '>': np_endian = '>'
+            elif endian in ('=', ''):
+                import sys
+                np_endian = '<' if sys.byteorder == 'little' else '>'
+            elif endian == '!': np_endian = '>'
+
+            np_type = np_endian + dtype_map.get(fmt_char, 'f4')
+
+            data_arr = np.frombuffer(rest_of_data, dtype=np_type).reshape((height, width, count))
+            # Cast to float64 to maintain EXACT API compatibility with the original struct.unpack (which returns Python floats)
+            data_arr = data_arr.astype(np.float64)
+
+        out_arr = data_arr.transpose(1, 0, 2)
+    return out_arr.copy()
 
 def _tri2quad(tc):
     # converts triangular coordinates into square coordinates.
