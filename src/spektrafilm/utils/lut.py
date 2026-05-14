@@ -1,5 +1,12 @@
+from dataclasses import dataclass
 import numpy as np
 from spektrafilm.utils.fast_interp_lut import apply_lut_3d, apply_lut_cubic_2d
+
+@dataclass(frozen=True, slots=True)
+class LUTConfig:
+    xmin: float | tuple[float, float, float] = (0.0, 0.0, 0.0)
+    xmax: float | tuple[float, float, float] = (1.0, 1.0, 1.0)
+    steps: int = 32
 
 def _as_channel_bounds(bounds):
     bounds_array = np.asarray(bounds, dtype=np.float64)
@@ -10,9 +17,10 @@ def _as_channel_bounds(bounds):
     raise ValueError('bounds must be a scalar or length-3 sequence')
 
 
-def _create_lut_3d(function, xmin=(0.0, 0.0, 0.0), xmax=(1.0, 1.0, 1.0), steps=32):
-    xmin = _as_channel_bounds(xmin)
-    xmax = _as_channel_bounds(xmax)
+def _create_lut_3d(function, config: LUTConfig):
+    xmin = _as_channel_bounds(config.xmin)
+    xmax = _as_channel_bounds(config.xmax)
+    steps = config.steps
     x_r = np.linspace(xmin[0], xmax[0], steps, endpoint=True)
     x_g = np.linspace(xmin[1], xmax[1], steps, endpoint=True)
     x_b = np.linspace(xmin[2], xmax[2], steps, endpoint=True)
@@ -30,17 +38,21 @@ def _create_lut_3d(function, xmin=(0.0, 0.0, 0.0), xmax=(1.0, 1.0, 1.0), steps=3
 #     lut = np.reshape(function(X), (steps, steps, 3))
 #     return lut
 
-def compute_with_lut(data, function, xmin=(0.0, 0.0, 0.0), xmax=(1.0, 1.0, 1.0), steps=32, lut=None):
+def compute_with_lut(data, function, config: LUTConfig | None = None, lut=None, **kwargs):
     # Computes the function on the data using a 3D LUT for acceleration.
     # The data is assumed to be in the range [xmin, xmax] and will be normalized for LUT indexing.
     # The lut is created on the fly in the range [xmin, xmax] with the specified number of steps.
     # Note: apply_lut_3d expects the data to be normalized to [0, 1] for proper indexing into the LUT.
-    xmin = _as_channel_bounds(xmin)
-    xmax = _as_channel_bounds(xmax)
+    if config is None:
+        config = LUTConfig(**kwargs)
+
+    xmin = _as_channel_bounds(config.xmin)
+    xmax = _as_channel_bounds(config.xmax)
+
     if np.any(xmax <= xmin):
         raise ValueError('xmax must be greater than xmin')
     if lut is None:
-        lut = _create_lut_3d(function, xmin, xmax, steps)
+        lut = _create_lut_3d(function, config)
     data_normalized = (data - xmin) / (xmax - xmin)
     return apply_lut_3d(lut, data_normalized), lut
 
