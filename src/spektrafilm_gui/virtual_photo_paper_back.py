@@ -198,11 +198,14 @@ def render_virtual_photo_paper_back(
         lift *= paper
         lift *= 0.42 * glare
 
-        for channel in range(3):
-            np.multiply(transmittance, delta[channel], out=canvas[..., channel])
-            canvas[..., channel] += logo[channel]
-            canvas[..., channel] *= variation
-            canvas[..., channel] += (1.0 - canvas[..., channel]) * lift
+        factor = np.empty_like(variation)
+        np.subtract(1.0, lift, out=factor)
+        np.multiply(factor, variation, out=factor)
+
+        np.multiply(transmittance[..., np.newaxis], delta, out=canvas)
+        np.add(canvas, logo, out=canvas)
+        np.multiply(canvas, factor[..., np.newaxis], out=canvas)
+        np.add(canvas, lift[..., np.newaxis], out=canvas)
     np.clip(canvas, 0.0, 1.0, out=canvas)
     t4 = perf_counter() if measure_timing else 0.0
 
