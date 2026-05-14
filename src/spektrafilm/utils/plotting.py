@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from dataclasses import dataclass
 
 from spektrafilm.model.color_filters import dichroic_filters
 
@@ -56,25 +57,32 @@ def plot(self):
     axs[2].set_ylabel('Diffuse Density')
     axs[2].set_xlim((350, 750))
     
+@dataclass(frozen=True, slots=True)
+class PrintFilterConfig:
+    y_filter: float = 70.0
+    y_filter_spread: float = 30.0
+    m_filter: float = 40.0
+    m_filter_spread: float = 30.0
+    c_filter: float = 0.0
+    points: int = 16
+
 def print_filter_test(self, emulsion, print_illuminant, viewing_illuminant,
-                        y_filter=70,
-                        y_filter_spread=30,
-                        m_filter=40,
-                        m_filter_spread=30,
-                        c_filter=0,
-                        points=16,
-                        ):
-    y_filter_range = np.linspace(y_filter-y_filter_spread/2,
-                                    y_filter+y_filter_spread/2,
-                                    points)
-    m_filter_range = np.linspace(m_filter-m_filter_spread/2,
-                                    m_filter+m_filter_spread/2,
-                                    points)
+                      config: PrintFilterConfig | None = None, **kwargs):
+    if config is None:
+        config = PrintFilterConfig(**kwargs)
+
+    y_filter_range = np.linspace(config.y_filter - config.y_filter_spread / 2,
+                                 config.y_filter + config.y_filter_spread / 2,
+                                 config.points)
+    m_filter_range = np.linspace(config.m_filter - config.m_filter_spread / 2,
+                                 config.m_filter + config.m_filter_spread / 2,
+                                 config.points)
+
     rgb = np.zeros((np.size(y_filter_range), np.size(m_filter_range), 3))
     for i, y_filter in enumerate(y_filter_range):
         for j, m_filter in enumerate(m_filter_range):
             emulsion.expose(self.midgray_rgb, apply_cctf_decoding=False)
-            filtered_illuminant = dichroic_filters.apply(print_illuminant, values=[y_filter, m_filter, c_filter])
+            filtered_illuminant = dichroic_filters.apply(print_illuminant, values=[y_filter, m_filter, config.c_filter])
             self.print(emulsion, filtered_illuminant)
             rgb[j,i] = self.scan(viewing_illuminant)
     colorfullness = np.mean(np.abs(rgb - np.mean(rgb, axis=2)[:,:,None]), axis=2)
