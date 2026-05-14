@@ -417,6 +417,7 @@ def _linear_mix(v0, v1, t):
 
 @njit(cache=True)
 def _bilinear_mix(v00, v10, v01, v11, tx, ty):
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     vx0 = _linear_mix(v00, v10, tx)
     vx1 = _linear_mix(v01, v11, tx)
     return _linear_mix(vx0, vx1, ty)
