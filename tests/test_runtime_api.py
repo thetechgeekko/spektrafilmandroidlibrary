@@ -46,6 +46,20 @@ class TestRuntimeApi:
 
         assert simulator.process('frame') == 'processed-updated-frame'
 
+    def test_update_params_calls_pipeline_update(self, monkeypatch):
+        import unittest.mock
+
+        class FakePipeline:
+            def __init__(self, params):
+                self.update = unittest.mock.MagicMock()
+
+        monkeypatch.setattr(process_module, 'SimulationPipeline', FakePipeline)
+        simulator = process_module.Simulator(SimpleNamespace())
+        new_params = SimpleNamespace(test='params')
+        simulator.update_params(new_params)
+
+        simulator._pipeline.update.assert_called_once_with(new_params)
+
     def test_soft_update_delegates_to_pipeline(self, monkeypatch):
         captured_kwargs = {}
 
