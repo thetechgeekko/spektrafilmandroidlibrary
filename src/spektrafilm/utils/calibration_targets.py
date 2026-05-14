@@ -1,33 +1,47 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
+from dataclasses import dataclass, field
+from typing import Tuple
 
 from spektrafilm.runtime.api import init_params, simulate
+
+@dataclass(frozen=True, slots=True)
+class CalibrationTargetConfig:
+    crop_center: Tuple[float, float] = (0.5, 0.5)
+    crop_size: Tuple[float, float] = (0.2, 1.0)
+    steps: int = 7
+    title: str = 'Test Strip'
+    stack: str = 'h'
+    rotate: bool = False
+    line_dividers: bool = False
 
 class CalibrationTarget:
     def __init__(self,
                  image,
-                 base_params=init_params(),
-                 crop_center=(0.5, 0.5),
-                 crop_size=(0.2, 1.0),
-                 steps=7,
-                 title='Test Strip',
-                 stack='h',
-                 rotate=False,
-                 line_dividers=False,
+                 base_params=None,
+                 config: CalibrationTargetConfig = None
                  ):
         self.image = image
-        if rotate:
+
+        if base_params is None:
+            base_params = init_params()
+
+        if config is None:
+            config = CalibrationTargetConfig()
+
+        if config.rotate:
             self.image = np.rot90(self.image)
+
         self.base_params = base_params
-        self.stack = stack
-        self.steps = steps
-        self.title = title
+        self.stack = config.stack
+        self.steps = config.steps
+        self.title = config.title
         self.labels = []
-        self.line_dividers = line_dividers
+        self.line_dividers = config.line_dividers
         
-        self.crop_center = crop_center
-        self.crop_size = crop_size
+        self.crop_center = config.crop_center
+        self.crop_size = config.crop_size
         self.clean_params()
     
     def clean_params(self, steps=7):
@@ -142,7 +156,13 @@ if __name__ == '__main__':
     p = init_params(film_profile='kodak_portra_400')
     p.io.input_cctf_decoding = True
       
-    strip = CalibrationTarget(image, base_params=p, stack='h', crop_size=(1.0,1.0), crop_center=(0.5,0.85), rotate=True)
+    config = CalibrationTargetConfig(
+        stack='h',
+        crop_size=(1.0, 1.0),
+        crop_center=(0.5, 0.85),
+        rotate=True
+    )
+    strip = CalibrationTarget(image, base_params=p, config=config)
     strip.negative_exposure_ramp(values=[-3, -2, -1, 0, 1, 2, 3, 4, 5, 6])
     fig = strip.process()
     plt.show()
