@@ -23,6 +23,20 @@ class InputImageState:
     filter_uv: tuple[float, float, float]
     filter_ir: tuple[float, float, float]
 
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> InputImageState:
+        return cls(
+            upscale_factor=params.io.upscale_factor,
+            crop=params.io.crop,
+            crop_center=tuple(params.io.crop_center),
+            crop_size=tuple(params.io.crop_size),
+            input_color_space=params.io.input_color_space,
+            apply_cctf_decoding=params.io.input_cctf_decoding,
+            spectral_upsampling_method=params.settings.rgb_to_raw_method,
+            filter_uv=tuple(params.camera.filter_uv),
+            filter_ir=tuple(params.camera.filter_ir),
+        )
+
 
 @dataclass(slots=True)
 class LoadRawState:
@@ -30,6 +44,15 @@ class LoadRawState:
     temperature: float
     tint: float
     lens_correction: bool
+
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> LoadRawState:
+        return cls(
+            white_balance='as_shot',
+            temperature=5500.0,
+            tint=1.0,
+            lens_correction=False,
+        )
 
 
 @dataclass(slots=True)
@@ -45,12 +68,35 @@ class GrainState:
     blur_dye_clouds_um: float
     micro_structure: tuple[float, float]
 
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> GrainState:
+        return cls(
+            active=params.film_render.grain.active,
+            sublayers_active=params.film_render.grain.sublayers_active,
+            particle_area_um2=params.film_render.grain.agx_particle_area_um2,
+            particle_scale=tuple(params.film_render.grain.agx_particle_scale),
+            particle_scale_layers=tuple(params.film_render.grain.agx_particle_scale_layers),
+            density_min=tuple(params.film_render.grain.density_min),
+            uniformity=tuple(params.film_render.grain.uniformity),
+            blur=params.film_render.grain.blur,
+            blur_dye_clouds_um=params.film_render.grain.blur_dye_clouds_um,
+            micro_structure=tuple(params.film_render.grain.micro_structure),
+        )
+
 
 @dataclass(slots=True)
 class PreflashingState:
     exposure: float
     y_filter_shift: float
     m_filter_shift: float
+
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> PreflashingState:
+        return cls(
+            exposure=params.enlarger.preflash_exposure,
+            y_filter_shift=params.enlarger.preflash_y_filter_shift,
+            m_filter_shift=params.enlarger.preflash_m_filter_shift,
+        )
 
 
 @dataclass(slots=True)
@@ -76,6 +122,27 @@ class HalationState:
     halation_bounce_decay: float
     halation_renormalize: bool
 
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> HalationState:
+        return cls(
+            active=params.film_render.halation.active,
+            scatter_amount=params.film_render.halation.scatter_amount,
+            scatter_spatial_scale=params.film_render.halation.scatter_spatial_scale,
+            halation_amount=params.film_render.halation.halation_amount,
+            halation_spatial_scale=params.film_render.halation.halation_spatial_scale,
+            boost_ev=params.film_render.halation.boost_ev,
+            protect_ev=params.film_render.halation.protect_ev,
+            boost_range=params.film_render.halation.boost_range,
+            scatter_core_um=tuple(params.film_render.halation.scatter_core_um),
+            scatter_tail_um=tuple(params.film_render.halation.scatter_tail_um),
+            scatter_tail_weight=tuple(value * 100.0 for value in params.film_render.halation.scatter_tail_weight),
+            halation_strength=tuple(value * 100.0 for value in params.film_render.halation.halation_strength),
+            halation_first_sigma_um=tuple(params.film_render.halation.halation_first_sigma_um),
+            halation_n_bounces=params.film_render.halation.halation_n_bounces,
+            halation_bounce_decay=params.film_render.halation.halation_bounce_decay,
+            halation_renormalize=params.film_render.halation.halation_renormalize,
+        )
+
 
 @dataclass(slots=True)
 class CouplersState:
@@ -89,6 +156,20 @@ class CouplersState:
     gamma_interlayer_b_to_rg: tuple[float, float]
     diffusion_size_um: float
 
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> CouplersState:
+        return cls(
+            active=params.film_render.dir_couplers.active,
+            amount=params.film_render.dir_couplers.amount,
+            inhibition_samelayer=params.film_render.dir_couplers.inhibition_samelayer,
+            inhibition_interlayer=params.film_render.dir_couplers.inhibition_interlayer,
+            gamma_samelayer_rgb=tuple(params.film_render.dir_couplers.gamma_samelayer_rgb),
+            gamma_interlayer_r_to_gb=tuple(params.film_render.dir_couplers.gamma_interlayer_r_to_gb),
+            gamma_interlayer_g_to_rb=tuple(params.film_render.dir_couplers.gamma_interlayer_g_to_rb),
+            gamma_interlayer_b_to_rg=tuple(params.film_render.dir_couplers.gamma_interlayer_b_to_rg),
+            diffusion_size_um=params.film_render.dir_couplers.diffusion_size_um,
+        )
+
 
 @dataclass(slots=True)
 class GlareState:
@@ -97,6 +178,15 @@ class GlareState:
     roughness: float
     blur: float
 
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> GlareState:
+        return cls(
+            active=params.print_render.glare.active,
+            percent=params.print_render.glare.percent,
+            roughness=params.print_render.glare.roughness,
+            blur=params.print_render.glare.blur,
+        )
+
 
 @dataclass(slots=True)
 class SpecialState:
@@ -104,6 +194,15 @@ class SpecialState:
     film_gamma_factor: float
     print_channel_swap: tuple[int, int, int]
     print_gamma_factor: float
+
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> SpecialState:
+        return cls(
+            film_channel_swap=(0, 1, 2),
+            film_gamma_factor=params.film_render.density_curve_gamma,
+            print_channel_swap=(0, 1, 2),
+            print_gamma_factor=params.print_render.density_curve_gamma,
+        )
 
 
 @dataclass(slots=True)
@@ -154,134 +253,9 @@ class SimulationState:
     auto_preview: bool
     scan_film: bool
 
-
-@dataclass(slots=True)
-class DisplayState:
-    use_display_transform: bool
-    gray_18_canvas: bool
-    white_padding: float
-    preview_max_size: int
-    output_interpolation: str = 'spline36'
-
-
-@dataclass(slots=True)
-class GuiState:
-    input_image: InputImageState
-    load_raw: LoadRawState
-    grain: GrainState
-    preflashing: PreflashingState
-    halation: HalationState
-    couplers: CouplersState
-    glare: GlareState
-    special: SpecialState
-    simulation: SimulationState
-    display: DisplayState
-
-
-def clone_state_section(section: StateSection) -> StateSection:
-    if not is_dataclass(section):
-        raise TypeError('Expected a dataclass instance to clone.')
-    return replace(section)
-
-
-def clone_gui_state(state: GuiState) -> GuiState:
-    return GuiState(
-        input_image=clone_state_section(state.input_image),
-        load_raw=clone_state_section(state.load_raw),
-        grain=clone_state_section(state.grain),
-        preflashing=clone_state_section(state.preflashing),
-        halation=clone_state_section(state.halation),
-        couplers=clone_state_section(state.couplers),
-        glare=clone_state_section(state.glare),
-        special=clone_state_section(state.special),
-        simulation=clone_state_section(state.simulation),
-        display=clone_state_section(state.display),
-    )
-
-
-def gui_state_from_params(
-    params: RuntimePhotoParams,
-    *,
-    film_stock: str,
-    print_paper: str,
-) -> GuiState:
-    return GuiState(
-        input_image=InputImageState(
-            upscale_factor=params.io.upscale_factor,
-            crop=params.io.crop,
-            crop_center=tuple(params.io.crop_center),
-            crop_size=tuple(params.io.crop_size),
-            input_color_space=params.io.input_color_space,
-            apply_cctf_decoding=params.io.input_cctf_decoding,
-            spectral_upsampling_method=params.settings.rgb_to_raw_method,
-            filter_uv=tuple(params.camera.filter_uv),
-            filter_ir=tuple(params.camera.filter_ir),
-        ),
-        load_raw=LoadRawState(
-            white_balance='as_shot',
-            temperature=5500.0,
-            tint=1.0,
-            lens_correction=False,
-        ),
-        grain=GrainState(
-            active=params.film_render.grain.active,
-            sublayers_active=params.film_render.grain.sublayers_active,
-            particle_area_um2=params.film_render.grain.agx_particle_area_um2,
-            particle_scale=tuple(params.film_render.grain.agx_particle_scale),
-            particle_scale_layers=tuple(params.film_render.grain.agx_particle_scale_layers),
-            density_min=tuple(params.film_render.grain.density_min),
-            uniformity=tuple(params.film_render.grain.uniformity),
-            blur=params.film_render.grain.blur,
-            blur_dye_clouds_um=params.film_render.grain.blur_dye_clouds_um,
-            micro_structure=tuple(params.film_render.grain.micro_structure),
-        ),
-        preflashing=PreflashingState(
-            exposure=params.enlarger.preflash_exposure,
-            y_filter_shift=params.enlarger.preflash_y_filter_shift,
-            m_filter_shift=params.enlarger.preflash_m_filter_shift,
-        ),
-        halation=HalationState(
-            active=params.film_render.halation.active,
-            scatter_amount=params.film_render.halation.scatter_amount,
-            scatter_spatial_scale=params.film_render.halation.scatter_spatial_scale,
-            halation_amount=params.film_render.halation.halation_amount,
-            halation_spatial_scale=params.film_render.halation.halation_spatial_scale,
-            boost_ev=params.film_render.halation.boost_ev,
-            protect_ev=params.film_render.halation.protect_ev,
-            boost_range=params.film_render.halation.boost_range,
-            scatter_core_um=tuple(params.film_render.halation.scatter_core_um),
-            scatter_tail_um=tuple(params.film_render.halation.scatter_tail_um),
-            scatter_tail_weight=tuple(value * 100.0 for value in params.film_render.halation.scatter_tail_weight),
-            halation_strength=tuple(value * 100.0 for value in params.film_render.halation.halation_strength),
-            halation_first_sigma_um=tuple(params.film_render.halation.halation_first_sigma_um),
-            halation_n_bounces=params.film_render.halation.halation_n_bounces,
-            halation_bounce_decay=params.film_render.halation.halation_bounce_decay,
-            halation_renormalize=params.film_render.halation.halation_renormalize,
-        ),
-        couplers=CouplersState(
-            active=params.film_render.dir_couplers.active,
-            amount=params.film_render.dir_couplers.amount,
-            inhibition_samelayer=params.film_render.dir_couplers.inhibition_samelayer,
-            inhibition_interlayer=params.film_render.dir_couplers.inhibition_interlayer,
-            gamma_samelayer_rgb=tuple(params.film_render.dir_couplers.gamma_samelayer_rgb),
-            gamma_interlayer_r_to_gb=tuple(params.film_render.dir_couplers.gamma_interlayer_r_to_gb),
-            gamma_interlayer_g_to_rb=tuple(params.film_render.dir_couplers.gamma_interlayer_g_to_rb),
-            gamma_interlayer_b_to_rg=tuple(params.film_render.dir_couplers.gamma_interlayer_b_to_rg),
-            diffusion_size_um=params.film_render.dir_couplers.diffusion_size_um,
-        ),
-        glare=GlareState(
-            active=params.print_render.glare.active,
-            percent=params.print_render.glare.percent,
-            roughness=params.print_render.glare.roughness,
-            blur=params.print_render.glare.blur,
-        ),
-        special=SpecialState(
-            film_channel_swap=(0, 1, 2),
-            film_gamma_factor=params.film_render.density_curve_gamma,
-            print_channel_swap=(0, 1, 2),
-            print_gamma_factor=params.print_render.density_curve_gamma,
-        ),
-        simulation=SimulationState(
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams, *, film_stock: str, print_paper: str) -> SimulationState:
+        return cls(
             film_stock=film_stock,
             film_format_mm=params.camera.film_format_mm,
             camera_lens_blur_um=params.camera.lens_blur_um,
@@ -327,14 +301,80 @@ def gui_state_from_params(
             saving_cctf_encoding=params.io.output_cctf_encoding,
             auto_preview=True,
             scan_film=params.io.scan_film,
-        ),
-        display=DisplayState(
+        )
+
+
+@dataclass(slots=True)
+class DisplayState:
+    use_display_transform: bool
+    gray_18_canvas: bool
+    white_padding: float
+    preview_max_size: int
+    output_interpolation: str = 'spline36'
+
+    @classmethod
+    def from_params(cls, params: RuntimePhotoParams) -> DisplayState:
+        return cls(
             use_display_transform=True,
             gray_18_canvas=True,
             output_interpolation='spline36',
             white_padding=0.03,
             preview_max_size=params.settings.preview_max_size,
-        ),
+        )
+
+
+@dataclass(slots=True)
+class GuiState:
+    input_image: InputImageState
+    load_raw: LoadRawState
+    grain: GrainState
+    preflashing: PreflashingState
+    halation: HalationState
+    couplers: CouplersState
+    glare: GlareState
+    special: SpecialState
+    simulation: SimulationState
+    display: DisplayState
+
+
+def clone_state_section(section: StateSection) -> StateSection:
+    if not is_dataclass(section):
+        raise TypeError('Expected a dataclass instance to clone.')
+    return replace(section)
+
+
+def clone_gui_state(state: GuiState) -> GuiState:
+    return GuiState(
+        input_image=clone_state_section(state.input_image),
+        load_raw=clone_state_section(state.load_raw),
+        grain=clone_state_section(state.grain),
+        preflashing=clone_state_section(state.preflashing),
+        halation=clone_state_section(state.halation),
+        couplers=clone_state_section(state.couplers),
+        glare=clone_state_section(state.glare),
+        special=clone_state_section(state.special),
+        simulation=clone_state_section(state.simulation),
+        display=clone_state_section(state.display),
+    )
+
+
+def gui_state_from_params(
+    params: RuntimePhotoParams,
+    *,
+    film_stock: str,
+    print_paper: str,
+) -> GuiState:
+    return GuiState(
+        input_image=InputImageState.from_params(params),
+        load_raw=LoadRawState.from_params(params),
+        grain=GrainState.from_params(params),
+        preflashing=PreflashingState.from_params(params),
+        halation=HalationState.from_params(params),
+        couplers=CouplersState.from_params(params),
+        glare=GlareState.from_params(params),
+        special=SpecialState.from_params(params),
+        simulation=SimulationState.from_params(params, film_stock=film_stock, print_paper=print_paper),
+        display=DisplayState.from_params(params),
     )
 
 
