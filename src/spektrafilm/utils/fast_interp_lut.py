@@ -2,6 +2,18 @@ import numpy as np
 import warnings
 from numba import njit, prange
 from scipy.ndimage import map_coordinates
+from typing import NamedTuple
+
+
+class PreparedPchipLUT3D(NamedTuple):
+    lut: np.ndarray
+    slope_x: np.ndarray
+    slope_y: np.ndarray
+    slope_z: np.ndarray
+    cell_min: np.ndarray
+    cell_max: np.ndarray
+
+
 
 @njit(cache=True)
 def mitchell_weight(t, B=1/3, C=1/3):
@@ -390,7 +402,7 @@ def prepare_lut_pchip_3d(lut):
     lut = np.ascontiguousarray(lut, dtype=np.float64)
     _warn_if_lut_not_monotonic_3d(lut)
     slope_x, slope_y, slope_z, cell_min, cell_max = _prepare_lut_pchip_3d_impl(lut)
-    return (
+    return PreparedPchipLUT3D(
         lut,
         np.ascontiguousarray(slope_x),
         np.ascontiguousarray(slope_y),
@@ -432,7 +444,8 @@ def _clamp_to_range(value, min_value, max_value):
 
 
 @njit(cache=True)
-def _pchip_interp_lut_at_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, r, g, b):
+def _pchip_interp_lut_at_3d_prepared(lut_data: PreparedPchipLUT3D, r, g, b):
+    lut, slope_x, slope_y, slope_z, cell_min, cell_max = lut_data
     size = lut.shape[0]
     i, tr = cubic_coordinate_base_fraction(r, size)
     j, tg = cubic_coordinate_base_fraction(g, size)
@@ -462,7 +475,8 @@ def _pchip_interp_lut_at_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, c
 
 
 @njit(parallel=True, cache=True)
-def _apply_lut_pchip_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, image):
+def _apply_lut_pchip_3d_prepared(lut_data: PreparedPchipLUT3D, image):
+    lut = lut_data[0] # or lut_data.lut in regular python, but namedtuple unpacks in numba by index
     height, width, _ = image.shape
     output = np.empty((height, width, 3), dtype=lut.dtype)
     scale = lut.shape[0] - 1
@@ -471,7 +485,7 @@ def _apply_lut_pchip_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_
             r_in = image[i, j, 0] * scale
             g_in = image[i, j, 1] * scale
             b_in = image[i, j, 2] * scale
-            out_val = _pchip_interp_lut_at_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, r_in, g_in, b_in)
+            out_val = _pchip_interp_lut_at_3d_prepared(lut_data, r_in, g_in, b_in)
             output[i, j, 0] = out_val[0]
             output[i, j, 1] = out_val[1]
             output[i, j, 2] = out_val[2]
@@ -480,12 +494,12 @@ def _apply_lut_pchip_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_
 def apply_lut_pchip_3d(lut, image):
     """
     Apply the PCHIP 3D LUT path using precomputed per-axis slopes.
-    Pass the tuple returned by prepare_lut_pchip_3d().
+    Pass the PreparedPchipLUT3D tuple returned by prepare_lut_pchip_3d().
     """
-    lut, slope_x, slope_y, slope_z, cell_min, cell_max = prepare_lut_pchip_3d(lut)
-    if lut.shape[0] == 1:
-        return _apply_lut_constant_3d(lut, image)
-    return _apply_lut_pchip_3d_prepared(lut, slope_x, slope_y, slope_z, cell_min, cell_max, image)
+    lut_data = prepare_lut_pchip_3d(lut)
+    if lut_data.lut.shape[0] == 1:
+        return _apply_lut_constant_3d(lut_data.lut, image)
+    return _apply_lut_pchip_3d_prepared(lut_data, image)
 
 
 #########################
