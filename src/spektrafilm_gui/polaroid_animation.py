@@ -22,6 +22,42 @@ class PolaroidState:
     layer_stack: np.ndarray
 
 
+@dataclass(slots=True, frozen=True)
+class RiseConfig:
+    center: float
+    slope: float
+    tail_power: float
+
+
+@dataclass(slots=True, frozen=True)
+class PulseConfig:
+    on_center: float
+    on_slope: float
+    off_center: float
+    off_slope: float
+    decay_power: float
+
+
+BODY_RISE_CONFIG = RiseConfig(center=0.19, slope=7.4, tail_power=3.8)
+NEUTRAL_RISE_CONFIG = RiseConfig(center=0.12, slope=8.0, tail_power=2.8)
+YELLOW_RISE_CONFIG = RiseConfig(center=0.22, slope=11.0, tail_power=3.0)
+MAGENTA_RISE_CONFIG = RiseConfig(center=0.31, slope=10.2, tail_power=3.4)
+CYAN_RISE_CONFIG = RiseConfig(center=0.52, slope=9.4, tail_power=5.4)
+
+SILVER_PULSE_CONFIG = PulseConfig(
+    on_center=0.05, on_slope=32.0, off_center=0.44, off_slope=8.0, decay_power=0.24
+)
+ANTI_PULSE_CONFIG = PulseConfig(
+    on_center=0.10, on_slope=54.0, off_center=0.28, off_slope=28.0, decay_power=0.18
+)
+WARM_PULSE_CONFIG = PulseConfig(
+    on_center=0.12, on_slope=20.0, off_center=0.80, off_slope=6.5, decay_power=0.34
+)
+STAIN_PULSE_CONFIG = PulseConfig(
+    on_center=0.03, on_slope=24.0, off_center=0.98, off_slope=4.0, decay_power=0.08
+)
+
+
 def _expit(x):
     return 1.0 / (1.0 + np.exp(-np.clip(x, -60.0, 60.0)))
 
@@ -33,15 +69,15 @@ def normalized_sigmoid(t, center, slope):
     return np.clip((value - start) / (end - start + EPSILON), 0.0, 1.0)
 
 
-def delayed_rise(t, center, slope, tail_power):
-    rise = normalized_sigmoid(t, center, slope)
-    return rise + (1.0 - rise) * (t**tail_power)
+def delayed_rise(t, config: RiseConfig):
+    rise = normalized_sigmoid(t, config.center, config.slope)
+    return rise + (1.0 - rise) * (t**config.tail_power)
 
 
-def windowed_pulse(t, on_center, on_slope, off_center, off_slope, decay_power):
-    rising = normalized_sigmoid(t, on_center, on_slope)
-    falling = 1.0 - normalized_sigmoid(t, off_center, off_slope)
-    return rising * falling * ((1.0 - t) ** decay_power)
+def windowed_pulse(t, config: PulseConfig):
+    rising = normalized_sigmoid(t, config.on_center, config.on_slope)
+    falling = 1.0 - normalized_sigmoid(t, config.off_center, config.off_slope)
+    return rising * falling * ((1.0 - t) ** config.decay_power)
 
 
 def normalize_image(img):
@@ -137,17 +173,17 @@ def prepare_polaroid_state(img):
 
 def layer_coefficients(t):
     t = float(np.clip(t, 0.0, 1.0))
-    body = delayed_rise(t, center=0.19, slope=7.4, tail_power=3.8)
+    body = delayed_rise(t, BODY_RISE_CONFIG)
 
-    neutral = body * delayed_rise(t, center=0.12, slope=8.0, tail_power=2.8)
-    yellow = body * delayed_rise(t, center=0.22, slope=11.0, tail_power=3.0)
-    magenta = body * delayed_rise(t, center=0.31, slope=10.2, tail_power=3.4)
-    cyan = body * delayed_rise(t, center=0.52, slope=9.4, tail_power=5.4)
+    neutral = body * delayed_rise(t, NEUTRAL_RISE_CONFIG)
+    yellow = body * delayed_rise(t, YELLOW_RISE_CONFIG)
+    magenta = body * delayed_rise(t, MAGENTA_RISE_CONFIG)
+    cyan = body * delayed_rise(t, CYAN_RISE_CONFIG)
     receiver = 1.08 * ((1.0 - t) ** 0.46)
-    silver = 1.00 * windowed_pulse(t, 0.05, 32.0, 0.44, 8.0, 0.24)
-    anti = 1.22 * windowed_pulse(t, 0.10, 54.0, 0.28, 28.0, 0.18)
-    warm = 0.96 * windowed_pulse(t, 0.12, 20.0, 0.80, 6.5, 0.34)
-    stain = 0.68 * windowed_pulse(t, 0.03, 24.0, 0.98, 4.0, 0.08)
+    silver = 1.00 * windowed_pulse(t, SILVER_PULSE_CONFIG)
+    anti = 1.22 * windowed_pulse(t, ANTI_PULSE_CONFIG)
+    warm = 0.96 * windowed_pulse(t, WARM_PULSE_CONFIG)
+    stain = 0.68 * windowed_pulse(t, STAIN_PULSE_CONFIG)
 
     return np.array(
         [neutral, yellow, magenta, cyan, receiver, silver, anti, warm, stain],
