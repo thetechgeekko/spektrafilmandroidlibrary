@@ -65,7 +65,7 @@ def add_micro_structure(density_cmy_out, micro_structure, pixel_size_um):
 
 def apply_grain_to_density(density_cmy,
                            pixel_size_um=10,
-                           agx_particle_area_um2=0.2,
+                           rms_granularity=12.0,
                            agx_particle_scale=[1,0.8,3],
                            density_min=[0.03,0.06,0.04],
                            density_max_curves=[2.2,2.2,2.2],
@@ -76,6 +76,17 @@ def apply_grain_to_density(density_cmy,
                            ):
     density_min = np.array(density_min)
     density_max = density_max_curves + density_min
+
+    sigma_d = rms_granularity / 1000.0
+    a_aperture = np.pi * (48.0 / 2.0)**2
+    d_nominal = 1.0
+    d_max_nominal = np.mean(density_max_curves)
+    u_nominal = np.mean(grain_uniformity)
+    if sigma_d > 0 and d_max_nominal > d_nominal * u_nominal:
+        agx_particle_area_um2 = (sigma_d**2 * a_aperture) / (d_nominal * (d_max_nominal - d_nominal * u_nominal))
+    else:
+        agx_particle_area_um2 = 0.0
+
     pixel_area_um2 = pixel_size_um**2
     agx_particle_area_um2 = agx_particle_area_um2*np.array(agx_particle_scale)
     n_particles_per_pixel = pixel_area_um2/agx_particle_area_um2
@@ -112,7 +123,7 @@ def apply_grain_to_density(density_cmy,
 def apply_grain_to_density_layers(density_cmy_layers, # x,y,sublayers,rgb
                                   density_max_layers, # 3x3 [sublayers,rgb]
                                   pixel_size_um=10,
-                                  agx_particle_area_um2=0.2,
+                                  rms_granularity=12.0,
                                   agx_particle_scale=[1,0.8,3], # rgb
                                   agx_particle_scale_layers=[3,1,0.3], # sublayers
                                   density_min=[0.03,0.06,0.04],
@@ -128,6 +139,16 @@ def apply_grain_to_density_layers(density_cmy_layers, # x,y,sublayers,rgb
     density_min_layers = density_max_fractions*np.array(density_min)[None,:]
     density_max_layers = density_max_layers + density_min_layers
     
+    sigma_d = rms_granularity / 1000.0
+    a_aperture = np.pi * (48.0 / 2.0)**2
+    d_nominal = 1.0
+    d_max_nominal = np.mean(density_max_total)
+    u_nominal = np.mean(grain_uniformity)
+    if sigma_d > 0 and d_max_nominal > d_nominal * u_nominal:
+        agx_particle_area_um2 = (sigma_d**2 * a_aperture) / (d_nominal * (d_max_nominal - d_nominal * u_nominal))
+    else:
+        agx_particle_area_um2 = 0.0
+
     pixel_area_um2 = pixel_size_um**2
     agx_particle_area_um2_layers = (agx_particle_area_um2 * 
                                     np.array(agx_particle_scale)[None,:] * 
@@ -181,7 +202,7 @@ def apply_grain(
         return apply_grain_to_density(
             density_cmy,
             pixel_size_um=pixel_size_um,
-            agx_particle_area_um2=grain.agx_particle_area_um2,
+            rms_granularity=grain.rms_granularity,
             agx_particle_scale=grain.agx_particle_scale,
             density_min=grain.density_min,
             density_max_curves=density_max,
@@ -201,7 +222,7 @@ def apply_grain(
         density_cmy_layers,
         density_max_layers=density_max_layers,
         pixel_size_um=pixel_size_um,
-        agx_particle_area_um2=grain.agx_particle_area_um2,
+        rms_granularity=grain.rms_granularity,
         agx_particle_scale=grain.agx_particle_scale,
         agx_particle_scale_layers=grain.agx_particle_scale_layers,
         density_min=grain.density_min,
@@ -211,8 +232,6 @@ def apply_grain(
         grain_micro_structure=grain.micro_structure,
         use_fast_stats=use_fast_stats,
     )
-
-# TODO: make grain parameter with RMS granularity
 
 if __name__=='__main__':
     density = np.ones((128,128))*2

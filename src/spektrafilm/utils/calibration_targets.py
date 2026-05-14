@@ -64,12 +64,12 @@ class CalibrationTarget:
             p.enlarger.print_exposure = v
             p.label = f'{v:.2f}'
     
-    def grain_ramp(self, values=[0.05, 0.1, 0.2, 0.4, 0.8, 1.6]):
+    def grain_ramp(self, values=[5.8, 8.2, 11.6, 16.4, 23.2, 32.8]):
         self.clean_params(steps=np.size(values))
-        self.title = 'Grain Particle Area (um$^2$)'
+        self.title = 'Grain RMS Granularity'
         for p, v in zip(self.params, values):
-            p.film_render.grain.agx_particle_area_um2 = v
-            p.label = f'{v:.2f}'
+            p.film_render.grain.rms_granularity = v
+            p.label = f'{v:.1f}'
             
     def dir_couplers_ramp(self, values=[0.0, 0.5, 1.0, 1.5, 2.0]):
         self.clean_params(steps=np.size(values))
