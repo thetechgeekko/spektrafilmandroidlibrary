@@ -6,7 +6,7 @@ from spektrafilm.model.color_filters import compute_band_pass_filter
 from spektrafilm.model.diffusion import apply_diffusion_filter_um, apply_gaussian_blur_um, apply_halation_um, boost_highlights
 from spektrafilm.model.emulsion import compute_density_spectral, develop, develop_simple
 from spektrafilm.utils.autoexposure import measure_autoexposure_ev
-from spektrafilm.utils.spectral_upsampling import rgb_to_raw_hanatos2025, rgb_to_raw_mallett2019
+from spektrafilm.utils.spectral_upsampling import rgb_to_raw_hanatos2025, rgb_to_raw_mallett2019, UpsamplingParams
 from spektrafilm.utils.timings import timeit
 
 
@@ -102,17 +102,16 @@ class FilmingStage:
                     )
                 sensitivity *= bandpass_hanatos2025
 
+        upsampling_params = UpsamplingParams(
+            color_space=color_space,
+            apply_cctf_decoding=apply_cctf_decoding,
+            reference_illuminant=self._film.info.reference_illuminant,
+        )
+
         if self._settings.rgb_to_raw_method == "hanatos2025":
-            raw = rgb_to_raw_hanatos2025(rgb, sensitivity,
-                            color_space=color_space, 
-                            apply_cctf_decoding=apply_cctf_decoding, 
-                            reference_illuminant=self._film.info.reference_illuminant,
-                            tc_lut=self._lut_service.get_filming_tc_lut(sensitivity))
+            raw = rgb_to_raw_hanatos2025(rgb, sensitivity, params=upsampling_params, tc_lut=self._lut_service.get_filming_tc_lut(sensitivity))
         elif self._settings.rgb_to_raw_method == "mallett2019":
-            raw = rgb_to_raw_mallett2019(rgb, sensitivity,
-                            color_space=color_space,
-                            apply_cctf_decoding=apply_cctf_decoding,
-                            reference_illuminant=self._film.info.reference_illuminant)
+            raw = rgb_to_raw_mallett2019(rgb, sensitivity, params=upsampling_params)
         else:
             raise ValueError(f"Unsupported rgb_to_raw method: {self._settings.rgb_to_raw_method}")
         return raw
