@@ -14,6 +14,49 @@ pytestmark = pytest.mark.integration
 
 
 class TestRuntimeApi:
+
+    def test_simulate_delegates_to_dependencies(self, monkeypatch):
+        # Mocks
+        digested_params_mock = "digested_params"
+
+        class FakeSimulator:
+            def __init__(self, params):
+                self.params = params
+                self.printed_timings = False
+
+            def process(self, image):
+                return f"processed_{image}_with_{self.params}"
+
+            def print_timings(self):
+                self.printed_timings = True
+
+        def fake_digest_params(params):
+            return f"digested_{params}"
+
+        monkeypatch.setattr(process_module, 'Simulator', FakeSimulator)
+        monkeypatch.setattr(process_module, 'digest_params', fake_digest_params)
+
+        # Test digest_params_first=True
+        result1 = process_module.simulate('image1', 'params1', digest_params_first=True, print_timings=False)
+        assert result1 == "processed_image1_with_digested_params1"
+
+        # Test digest_params_first=False
+        result2 = process_module.simulate('image2', 'params2', digest_params_first=False, print_timings=False)
+        assert result2 == "processed_image2_with_params2"
+
+        # Test print_timings=True
+        # We need to capture the Simulator instance to check if print_timings was called
+        simulator_instances = []
+        class SpyingFakeSimulator(FakeSimulator):
+            def __init__(self, params):
+                super().__init__(params)
+                simulator_instances.append(self)
+
+        monkeypatch.setattr(process_module, 'Simulator', SpyingFakeSimulator)
+        process_module.simulate('image3', 'params3', digest_params_first=False, print_timings=True)
+        assert len(simulator_instances) == 1
+        assert simulator_instances[0].printed_timings is True
+
     def test_simulate_matches_simulator_process(self, small_rgb_image, default_params):
         new_result = simulate(small_rgb_image, default_params)
         direct_result = Simulator(default_params).process(small_rgb_image)
