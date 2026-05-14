@@ -101,7 +101,7 @@ def _apply_halation(params: RuntimePhotoParams, state: GuiState) -> None:
 def _apply_grain(params: RuntimePhotoParams, state: GuiState) -> None:
     params.film_render.grain.active = state.grain.active
     params.film_render.grain.sublayers_active = state.grain.sublayers_active
-    params.film_render.grain.agx_particle_area_um2 = state.grain.particle_area_um2
+    params.film_render.grain.rms_granularity = state.grain.rms_granularity
     params.film_render.grain.agx_particle_scale = state.grain.particle_scale
     params.film_render.grain.agx_particle_scale_layers = state.grain.particle_scale_layers
     params.film_render.grain.density_min = state.grain.density_min

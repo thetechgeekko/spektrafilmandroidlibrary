@@ -479,14 +479,14 @@ GUI_WIDGET_SPECS = {
     },
     "grain": {
         "active": WidgetSpec(tooltip="Add grain to the negative"),
-        "particle_area_um2": WidgetSpec(
-            tooltip="Area of the particles in um2, relates to ISO. Approximately 0.1 for ISO 100, 0.1 for ISO 200, 0.4 for ISO 400 and so on.",
-            step=0.2,
+        "rms_granularity": WidgetSpec(
+            tooltip="RMS Granularity (x1000) of the grain, related to ISO.",
+            step=0.5,
             min_value=0,
         ),
-        "particle_scale": WidgetSpec(tooltip="Scale of particle area for the RGB layers, multiplies particle_area_um2"),
+        "particle_scale": WidgetSpec(tooltip="Scale of particle area for the RGB layers, multiplies the effect of rms_granularity"),
         "particle_scale_layers": WidgetSpec(
-            tooltip="Scale of particle area for the sublayers in every color layer, multiplies particle_area_um2",
+            tooltip="Scale of particle area for the sublayers in every color layer, multiplies the effect of rms_granularity",
             min_value=0,
             step=0.25,
         ),
