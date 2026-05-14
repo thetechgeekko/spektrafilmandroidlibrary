@@ -18,7 +18,7 @@ PROFILE_SYNC_FIELDS: dict[str, tuple[str, ...]] = {
     'grain': (
         'active',
         'sublayers_active',
-        'particle_area_um2',
+        'rms_granularity',
         'particle_scale',
         'particle_scale_layers',
         'density_min',
