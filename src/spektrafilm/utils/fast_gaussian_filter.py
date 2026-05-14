@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 import numpy as np
 from numba import njit, prange
 
@@ -119,6 +121,13 @@ def _gaussian_filter_2d_small(image, sigma, truncate):
 # max error vs the analytic Gaussian is around 1e-3.
 # ---------------------------------------------------------------------------
 
+class IIRCoeffs(NamedTuple):
+    B: float
+    B1: float
+    B2: float
+    B3: float
+
+
 def _yvv_coeffs(sigma):
     if sigma >= 2.5:
         q = 0.98711 * sigma - 0.96330
@@ -131,11 +140,12 @@ def _yvv_coeffs(sigma):
     b2 = -(1.4281 * q2 + 1.26661 * q3)
     b3 = 0.422205 * q3
     B = 1.0 - (b1 + b2 + b3) / b0
-    return B, b1 / b0, b2 / b0, b3 / b0
+    return IIRCoeffs(B, b1 / b0, b2 / b0, b3 / b0)
 
 
 @njit(parallel=True, cache=True, fastmath=True)
-def _iir_horizontal(image, output, B, B1, B2, B3):
+def _iir_horizontal(image, output, coeffs):
+    B, B1, B2, B3 = coeffs
     n, m = image.shape
     for i in prange(n):
         x0 = image[i, 0]
@@ -164,7 +174,8 @@ _IIR_COL_CHUNK = 32
 
 
 @njit(parallel=True, cache=True, fastmath=True)
-def _iir_vertical(image, output, B, B1, B2, B3):
+def _iir_vertical(image, output, coeffs):
+    B, B1, B2, B3 = coeffs
     # Process columns in chunks: state vectors carry the per-column
     # recurrence while the inner k-loop iterates contiguously across the
     # chunk so reads/writes touch adjacent memory each row.
@@ -212,11 +223,11 @@ def _gaussian_filter_2d_large(image, sigma):
     if sigma < 0.5:
         # IIR coefficients are unstable below 0.5 — fall back to direct FIR.
         return _gaussian_filter_2d_small(image, sigma, 3.0)
-    B, B1, B2, B3 = _yvv_coeffs(float(sigma))
+    coeffs = _yvv_coeffs(float(sigma))
     tmp = np.empty_like(image)
     output = np.empty_like(image)
-    _iir_horizontal(image, tmp, B, B1, B2, B3)
-    _iir_vertical(tmp, output, B, B1, B2, B3)
+    _iir_horizontal(image, tmp, coeffs)
+    _iir_vertical(tmp, output, coeffs)
     return output
 
 
