@@ -127,7 +127,8 @@ def _complete_output_animation(monkeypatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _stub_virtual_paper_back(monkeypatch) -> None:
-    def fake_virtual_photo_paper_back(*, canvas_size, **_kwargs):
+    def fake_virtual_photo_paper_back(config=None, **_kwargs):
+        canvas_size = config.canvas_size if config else _kwargs.get("canvas_size")
         width, height = (canvas_size, canvas_size) if isinstance(canvas_size, int) else canvas_size
         return np.full((int(height), int(width), 3), 0.2, dtype=np.float32)
 

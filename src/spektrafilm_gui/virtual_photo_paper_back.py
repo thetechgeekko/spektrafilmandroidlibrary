@@ -1,6 +1,8 @@
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 import numpy as np
 from scipy import ndimage
@@ -22,6 +24,31 @@ PHASE_VERTICAL = 0.0  # long-edge fraction
 DEFAULT_LOGO_RGB = np.array((215,215,215))/255  # RGB 0..1
 DEFAULT_BACKGROUND_RGB = np.array((242,242,242))/255  # RGB 0..1
 DEFAULT_GLARE = 0.25  # paper glare strength
+
+
+def _default_logo_rgb() -> Any:
+    return np.array((215, 215, 215)) / 255.0
+
+
+def _default_background_rgb() -> Any:
+    return np.array((242, 242, 242)) / 255.0
+
+
+@dataclass(frozen=True, slots=True)
+class VirtualPhotoPaperBackConfig:
+    canvas_size: tuple[int, int] | int = DEFAULT_CANVAS_SIZE
+    zoom: float = GRID_SCALE
+    angle: float = GLOBAL_ROTATION
+    overlap: float = OVERLAP_FRACTION
+    center_distance: float | None = DEFAULT_CENTER_DISTANCE
+    logo_rgb: Any = field(default_factory=_default_logo_rgb)
+    background_rgb: Any = field(default_factory=_default_background_rgb)
+    glare: float = DEFAULT_GLARE
+    rombic_grid_angle: float = ROMBIC_GRID_ANGLE
+    phase_horizontal: float = PHASE_HORIZONTAL
+    phase_vertical: float = PHASE_VERTICAL
+    seed: int | None = 0
+    measure_timing: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -131,51 +158,43 @@ def multiply_tile_transmittance(transmittance, inverse_alpha, center):
 
 
 def render_virtual_photo_paper_back(
-    canvas_size=DEFAULT_CANVAS_SIZE,
-    zoom=GRID_SCALE,
-    angle=GLOBAL_ROTATION,
-    overlap=OVERLAP_FRACTION,
-    center_distance=DEFAULT_CENTER_DISTANCE,
-    logo_rgb=DEFAULT_LOGO_RGB,
-    background_rgb=DEFAULT_BACKGROUND_RGB,
-    glare=DEFAULT_GLARE,
-    rombic_grid_angle=ROMBIC_GRID_ANGLE,
-    phase_horizontal=PHASE_HORIZONTAL,
-    phase_vertical=PHASE_VERTICAL,
-    seed=0,
-    measure_timing=False,
+    config: VirtualPhotoPaperBackConfig | None = None,
+    **kwargs,
 ):
-    t0 = perf_counter() if measure_timing else 0.0
-    canvas_width, canvas_height = (canvas_size, canvas_size) if isinstance(canvas_size, int) else canvas_size
+    if config is None:
+        config = VirtualPhotoPaperBackConfig(**kwargs)
+
+    t0 = perf_counter() if config.measure_timing else 0.0
+    canvas_width, canvas_height = (config.canvas_size, config.canvas_size) if isinstance(config.canvas_size, int) else config.canvas_size
     canvas_width = int(canvas_width)
     canvas_height = int(canvas_height)
     canvas_shape = (canvas_height, canvas_width)
     canvas_long_edge = float(max(canvas_width, canvas_height))
-    background = np.asarray(background_rgb, dtype=np.float32)
-    logo = np.asarray(DEFAULT_LOGO_RGB if logo_rgb is None else logo_rgb, dtype=np.float32)
+    background = np.asarray(config.background_rgb, dtype=np.float32)
+    logo = np.asarray(DEFAULT_LOGO_RGB if config.logo_rgb is None else config.logo_rgb, dtype=np.float32)
 
     source_alpha = load_logo_alpha()
-    tile_scale = float(zoom) * canvas_long_edge / float(max(source_alpha.shape))
-    tile_alpha, inverse_alpha, scaled_width = prepare_tile_stamp(tile_scale, float(angle))
-    t1 = perf_counter() if measure_timing else 0.0
+    tile_scale = float(config.zoom) * canvas_long_edge / float(max(source_alpha.shape))
+    tile_alpha, inverse_alpha, scaled_width = prepare_tile_stamp(tile_scale, float(config.angle))
+    t1 = perf_counter() if config.measure_timing else 0.0
 
-    spacing = None if center_distance is None else float(center_distance) * canvas_long_edge
-    basis = build_rhombic_basis(scaled_width, overlap, rombic_grid_angle, angle, spacing)
+    spacing = None if config.center_distance is None else float(config.center_distance) * canvas_long_edge
+    basis = build_rhombic_basis(scaled_width, config.overlap, config.rombic_grid_angle, config.angle, spacing)
     centers = generate_lattice_centers(
         canvas_shape,
         tile_alpha.shape,
         basis,
-        float(phase_horizontal) * canvas_long_edge,
-        float(phase_vertical) * canvas_long_edge,
+        float(config.phase_horizontal) * canvas_long_edge,
+        float(config.phase_vertical) * canvas_long_edge,
     )
-    t2 = perf_counter() if measure_timing else 0.0
+    t2 = perf_counter() if config.measure_timing else 0.0
 
     transmittance = np.ones(canvas_shape, dtype=np.float32)
     for center in centers:
         multiply_tile_transmittance(transmittance, inverse_alpha, center)
-    t3 = perf_counter() if measure_timing else 0.0
+    t3 = perf_counter() if config.measure_timing else 0.0
 
-    glare_map = build_glare_map(canvas_shape, glare, seed)
+    glare_map = build_glare_map(canvas_shape, config.glare, config.seed)
     delta = background - logo
     canvas = np.empty((canvas_height, canvas_width, 3), dtype=np.float32)
     if glare_map is None:
@@ -191,12 +210,12 @@ def render_virtual_photo_paper_back(
         np.multiply(glare_map, 2.0, out=variation)
         variation -= 1.0
         variation *= paper
-        variation *= 0.07 * glare
+        variation *= 0.07 * config.glare
         variation += 1.0
 
         lift = np.power(glare_map, 6.0)
         lift *= paper
-        lift *= 0.42 * glare
+        lift *= 0.42 * config.glare
 
         factor = np.empty_like(variation)
         np.subtract(1.0, lift, out=factor)
@@ -207,10 +226,10 @@ def render_virtual_photo_paper_back(
         np.multiply(canvas, factor[..., np.newaxis], out=canvas)
         np.add(canvas, lift[..., np.newaxis], out=canvas)
     np.clip(canvas, 0.0, 1.0, out=canvas)
-    t4 = perf_counter() if measure_timing else 0.0
+    t4 = perf_counter() if config.measure_timing else 0.0
 
     timings = None
-    if measure_timing:
+    if config.measure_timing:
         timings = {
             "stamp_ms": 1000.0 * (t1 - t0),
             "grid_ms": 1000.0 * (t2 - t1),
@@ -223,37 +242,19 @@ def render_virtual_photo_paper_back(
 
 
 def virtual_photo_paper_back(
-    canvas_size=DEFAULT_CANVAS_SIZE,
-    zoom=GRID_SCALE,
-    angle=GLOBAL_ROTATION,
-    overlap=OVERLAP_FRACTION,
-    center_distance=DEFAULT_CENTER_DISTANCE,
-    logo_rgb=DEFAULT_LOGO_RGB,
-    background_rgb=DEFAULT_BACKGROUND_RGB,
-    glare=DEFAULT_GLARE,
-    rombic_grid_angle=ROMBIC_GRID_ANGLE,
-    phase_horizontal=PHASE_HORIZONTAL,
-    phase_vertical=PHASE_VERTICAL,
-    seed=0,
-    print_timing=False,
+    config: VirtualPhotoPaperBackConfig | None = None,
+    print_timing: bool = False,
+    **kwargs,
 ):
+    if config is None:
+        kwargs["measure_timing"] = print_timing
+        config = VirtualPhotoPaperBackConfig(**kwargs)
+
     canvas, centers, timings = render_virtual_photo_paper_back(
-        canvas_size=canvas_size,
-        zoom=zoom,
-        angle=angle,
-        overlap=overlap,
-        center_distance=center_distance,
-        logo_rgb=logo_rgb,
-        background_rgb=background_rgb,
-        glare=glare,
-        rombic_grid_angle=rombic_grid_angle,
-        phase_horizontal=phase_horizontal,
-        phase_vertical=phase_vertical,
-        seed=seed,
-        measure_timing=print_timing,
+        config=config,
     )
     if print_timing and timings is not None:
-        canvas_width, canvas_height = (canvas_size, canvas_size) if isinstance(canvas_size, int) else canvas_size
+        canvas_width, canvas_height = (config.canvas_size, config.canvas_size) if isinstance(config.canvas_size, int) else config.canvas_size
         print(
             "virtual_photo_paper_back"
             f" | canvas={int(canvas_width)}x{int(canvas_height)}"
