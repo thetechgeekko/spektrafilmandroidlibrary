@@ -42,8 +42,7 @@ class CalibrationTarget:
             self.params.append(p)
     
     def process(self, plot=True):
-        strip, labels = self._compute(self.image, self.params, self.title,
-                        stack=self.stack, plot=True)
+        strip, labels = self._compute()
         self.labels = labels
         if plot:
             fig = self._plot(strip, self.steps, labels, self.title, self.stack, self.line_dividers)
@@ -86,16 +85,15 @@ class CalibrationTarget:
             p.label = f'{v:.2f}'
     
 
-    def _compute(self, image, conditions, title,
-                        stack='h', plot=True):
+    def _compute(self):
         labels = []
-        for i, p in enumerate(conditions):
-            section = simulate(image, p)
-            if stack == 'h':
+        for i, p in enumerate(self.params):
+            section = simulate(self.image, p)
+            if self.stack == 'h':
                 if i == 0:
                     strip = np.zeros((section.shape[0], 0, section.shape[2]))
                 strip = np.hstack([strip, section])
-            if stack == 'v':
+            if self.stack == 'v':
                 if i == 0:
                     strip = np.zeros((0, section.shape[1], section.shape[2]))
                 strip = np.vstack([strip, section])
